@@ -239,6 +239,10 @@ class OpenAIResponsesAdapter:
         self._model = settings.openai_model
         self._timeout = settings.ai_timeout_seconds
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def probe(self) -> None:
         self._client.models.retrieve(self._model)
 

@@ -1,4 +1,6 @@
 import json
+from dataclasses import replace
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -7,7 +9,9 @@ from cajnmnstr.config import PAPER_API_URL, Settings
 from cajnmnstr.decision_cycle import (
     EvidenceCalculator,
     FixtureAnalysisProvider,
+    RefereeDecision,
     ReplayDecisionPipeline,
+    ReplayOptionSelector,
     replay_distribution,
 )
 from cajnmnstr.journal import Journal
@@ -157,6 +161,55 @@ def test_contract_failures_never_create_actionable_selection(tmp_path: Path) -> 
     }
 
 
+def test_invalid_numeric_greeks_iv_and_quotes_fail_closed() -> None:
+    document = replay_document()
+    scenario = next(
+        item for item in document["scenarios"] if item["scenario_id"] == "bullish-approve"
+    )
+    snapshot = EvidenceCalculator().build(document, scenario)
+    call = next(item for item in snapshot.option_chain if "C" in item.symbol)
+    referee = RefereeDecision(
+        verdict=RefereeVerdict.APPROVE,
+        reason_code="TEST",
+        support_count=3,
+        opposition_count=0,
+        max_quantity=1,
+        max_limit_price=Decimal("4.25"),
+    )
+    variants = {
+        "INVALID_GREEKS": replace(call, gamma=Decimal("NaN")),
+        "IV_INVALID": replace(call, implied_volatility=Decimal("-0.01")),
+        "QUOTE_INVALID_ZERO": replace(call, bid_price=Decimal("0")),
+        "QUOTE_INVALID_CROSSED": replace(
+            call,
+            bid_price=Decimal("4.20"),
+            ask_price=Decimal("4.19"),
+        ),
+        "QUOTE_LIQUIDITY_INVALID": replace(call, ask_size=Decimal("0")),
+        "QUOTE_STALE": replace(
+            call,
+            quote_at=snapshot.decision_at - timedelta(seconds=301),
+        ),
+    }
+    expected_reasons = {
+        "INVALID_GREEKS": "INVALID_GREEKS",
+        "IV_INVALID": "IV_INVALID",
+        "QUOTE_INVALID_ZERO": "QUOTE_INVALID",
+        "QUOTE_INVALID_CROSSED": "QUOTE_INVALID",
+        "QUOTE_LIQUIDITY_INVALID": "QUOTE_LIQUIDITY_INVALID",
+        "QUOTE_STALE": "QUOTE_STALE",
+    }
+    for name, option in variants.items():
+        result = ReplayOptionSelector().select(
+            scenario_id=name.lower(),
+            snapshot=replace(snapshot, option_chain=(option,)),
+            direction=ProposalDirection.LONG_CALL,
+            referee=referee,
+        )
+        assert result.candidate is None
+        assert result.rejection_counts[expected_reasons[name]] == 1
+
+
 def test_distribution_and_sealed_passports_are_durable(tmp_path: Path) -> None:
     results, journal, _ = run_replay(tmp_path)
 
@@ -226,3 +279,64 @@ def test_unknown_terra_citation_fails_to_abstain(tmp_path: Path) -> None:
     assert result.proposal.direction is ProposalDirection.NO_TRADE
     assert result.referee.verdict is RefereeVerdict.ABSTAIN
     assert result.selection.candidate is None
+
+
+def test_identical_evidence_epoch_reuses_one_canonical_terra_decision(
+    tmp_path: Path,
+) -> None:
+    document = replay_document()
+    proposals = {
+        str(item["scenario_id"]): item["fixture_proposal"]
+        for item in document["scenarios"]
+    }
+
+    class CountingFixtureProvider(FixtureAnalysisProvider):
+        def __init__(self) -> None:
+            super().__init__(proposals)
+            self.calls = 0
+
+        def analyze(self, *, instructions: str, evidence_json: str):
+            self.calls += 1
+            return super().analyze(
+                instructions=instructions,
+                evidence_json=evidence_json,
+            )
+
+    provider = CountingFixtureProvider()
+    app_settings = settings(tmp_path)
+    journal = Journal(app_settings.journal_path)
+    pipeline = ReplayDecisionPipeline(app_settings, journal, provider)
+
+    first = pipeline.run_document(document)
+    first_call_count = provider.calls
+    second = pipeline.run_document(document)
+
+    unique_decision_ids = {result.decision_id for result in first}
+    assert first_call_count == len(unique_decision_ids)
+    assert first_call_count < len(first)
+    assert provider.calls == first_call_count
+    assert all(result.ai_cached for result in second)
+    assert [result.decision_id for result in first] == [
+        result.decision_id for result in second
+    ]
+    for decision_id in unique_decision_ids:
+        attempts = journal.ai_decision_attempts(decision_id)
+        assert len(attempts) == 1
+        assert attempts[0]["attempt_number"] == 1
+        assert attempts[0]["transport_retry"] == 0
+    sample = first[0]
+    stored = journal.get_ai_decision(
+        evidence_snapshot_hash=sample.evidence_snapshot_hash,
+        prompt_version="terra-replay-v1",
+        prompt_hash=sample.prompt_hash,
+        model=provider.model_name,
+    )
+    assert stored is not None
+    assert stored["decision_id"] == sample.decision_id
+    assert stored["prompt_version"] == "terra-replay-v1"
+    assert stored["created_at"]
+    assert stored["completed_at"]
+    assert stored["response"]["proposal"]["direction"] == "LONG_CALL"
+    assert stored["abstention"] == 0
+    assert stored["latency_ms"] >= 0
+    assert stored["validation_status"] == "VALID"

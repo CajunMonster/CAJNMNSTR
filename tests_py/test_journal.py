@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from cajnmnstr.journal import Journal
@@ -34,3 +35,13 @@ def test_passport_events_and_order_idempotency_are_durable(tmp_path: Path) -> No
     )
     assert journal.local_client_order_ids() == {"cajnmnstr-test-001"}
     journal.seal_passport("passport-001", {"verdict": "ABSTAIN"})
+
+
+def test_sqlite_uses_wal_and_full_synchronous_durability(tmp_path: Path) -> None:
+    journal = Journal(tmp_path / "journal" / "durable.sqlite3")
+    journal.initialize()
+    with sqlite3.connect(journal.path) as connection:
+        journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+        synchronous = connection.execute("PRAGMA synchronous").fetchone()[0]
+    assert str(journal_mode).lower() == "wal"
+    assert synchronous == 2

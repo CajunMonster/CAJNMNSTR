@@ -114,6 +114,9 @@ class OrderCandidate:
     limit_price: Decimal
     client_order_id: str
     position_intent: str
+    decision_bid: Decimal
+    decision_ask: Decimal
+    quote_at: datetime
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"SPY\d{6}[CP]\d{8}", self.symbol):
@@ -122,6 +125,12 @@ class OrderCandidate:
             raise ValueError("Quantity must be a positive whole number")
         if self.limit_price <= 0:
             raise ValueError("Limit price must be positive")
+        if not self.decision_bid.is_finite() or not self.decision_ask.is_finite():
+            raise ValueError("Decision quote prices must be finite")
+        if self.decision_bid <= 0 or self.decision_ask <= self.decision_bid:
+            raise ValueError("Decision quote must be positive and uncrossed")
+        if self.quote_at.tzinfo is None:
+            raise ValueError("Decision quote timestamp must include a timezone")
         if self.side not in {"buy", "sell"}:
             raise ValueError("Side must be buy or sell")
         if self.position_intent not in {"buy_to_open", "sell_to_close"}:
@@ -155,6 +164,9 @@ class OrderIntent:
     client_order_id: str
     position_intent: str
     passport_id: str
+    decision_bid: Decimal
+    decision_ask: Decimal
+    quote_at: datetime
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"SPY\d{6}[CP]\d{8}", self.symbol):
@@ -163,6 +175,12 @@ class OrderIntent:
             raise ValueError("Quantity must be a positive whole number")
         if self.limit_price <= 0:
             raise ValueError("Limit price must be positive")
+        if not self.decision_bid.is_finite() or not self.decision_ask.is_finite():
+            raise ValueError("Decision quote prices must be finite")
+        if self.decision_bid <= 0 or self.decision_ask <= self.decision_bid:
+            raise ValueError("Decision quote must be positive and uncrossed")
+        if self.quote_at.tzinfo is None:
+            raise ValueError("Decision quote timestamp must include a timezone")
         if self.side not in {"buy", "sell"}:
             raise ValueError("Side must be buy or sell")
         if self.position_intent not in {"buy_to_open", "sell_to_close"}:
@@ -184,6 +202,7 @@ class BrokerOrderSnapshot:
     status: str
     quantity: Decimal
     filled_quantity: Decimal
+    filled_avg_price: Decimal | None
     limit_price: Decimal | None
     submitted_at: datetime | None
     updated_at: datetime
@@ -206,7 +225,12 @@ class ReconciliationReport:
     broker_position_count: int
     unknown_broker_client_ids: tuple[str, ...] = field(default_factory=tuple)
     missing_broker_client_ids: tuple[str, ...] = field(default_factory=tuple)
+    unverified_flat_client_ids: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def matched(self) -> bool:
-        return not self.unknown_broker_client_ids and not self.missing_broker_client_ids
+        return (
+            not self.unknown_broker_client_ids
+            and not self.missing_broker_client_ids
+            and not self.unverified_flat_client_ids
+        )

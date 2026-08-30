@@ -74,6 +74,35 @@ SCHEMA_STATEMENTS = (
         resolved_at TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_decisions (
+        decision_id TEXT PRIMARY KEY,
+        evidence_snapshot_hash TEXT NOT NULL,
+        prompt_version TEXT NOT NULL,
+        prompt_hash TEXT NOT NULL,
+        model TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        completed_at TEXT,
+        response_json TEXT,
+        abstention INTEGER,
+        latency_ms INTEGER,
+        validation_status TEXT NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (evidence_snapshot_hash, prompt_version, prompt_hash, model)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_decision_attempts (
+        decision_id TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        occurred_at TEXT NOT NULL,
+        transport_retry INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        latency_ms INTEGER,
+        PRIMARY KEY (decision_id, attempt_number),
+        FOREIGN KEY (decision_id) REFERENCES ai_decisions(decision_id)
+    )
+    """,
     """CREATE INDEX IF NOT EXISTS idx_journal_events_occurred_at
     ON journal_events(occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_journal_events_passport
@@ -102,6 +131,7 @@ class Journal:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA busy_timeout = 5000")
+            connection.execute("PRAGMA synchronous = FULL")
             yield connection
             connection.commit()
         except (OSError, sqlite3.Error) as exc:
@@ -119,6 +149,7 @@ class Journal:
             ) from exc
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
+            connection.execute("PRAGMA synchronous = FULL")
             for statement in SCHEMA_STATEMENTS:
                 connection.execute(statement)
             connection.execute("PRAGMA optimize")
@@ -426,6 +457,16 @@ class Journal:
         payload: dict[str, Any],
     ) -> None:
         with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT payload_json FROM broker_orders WHERE client_order_id = ?",
+                (client_order_id,),
+            ).fetchone()
+            if existing is None:
+                raise EvidenceStoreError(f"Unknown client order ID: {client_order_id}")
+            merged_payload = {
+                **json.loads(str(existing["payload_json"])),
+                **payload,
+            }
             cursor = connection.execute(
                 """UPDATE broker_orders
                 SET broker_order_id = COALESCE(?, broker_order_id), status = ?,
@@ -435,7 +476,7 @@ class Journal:
                     broker_order_id,
                     status,
                     _iso(),
-                    json.dumps(payload, sort_keys=True, default=str),
+                    json.dumps(merged_payload, sort_keys=True, default=str),
                     client_order_id,
                 ),
             )
@@ -446,6 +487,155 @@ class Journal:
         with self._connect() as connection:
             rows = connection.execute("SELECT client_order_id FROM broker_orders").fetchall()
         return {str(row["client_order_id"]) for row in rows}
+
+    def broker_order_records(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT client_order_id, passport_id, broker_order_id, status,
+                created_at, updated_at, payload_json FROM broker_orders
+                ORDER BY created_at, client_order_id"""
+            ).fetchall()
+        return [
+            {
+                **dict(row),
+                "payload": json.loads(str(row["payload_json"])),
+            }
+            for row in rows
+        ]
+
+    def has_unverified_exit(self) -> bool:
+        return any(
+            record["status"] in {"EXIT_PENDING_RECONCILIATION", "SUBMIT_UNKNOWN"}
+            and record["payload"].get("intent", {}).get("position_intent")
+            == "sell_to_close"
+            for record in self.broker_order_records()
+        )
+
+    def has_broker_uncertainty(self) -> bool:
+        return any(
+            record["status"] in {"EXIT_PENDING_RECONCILIATION", "SUBMIT_UNKNOWN"}
+            for record in self.broker_order_records()
+        )
+
+    def claim_ai_decision(
+        self,
+        *,
+        decision_id: str,
+        evidence_snapshot_hash: str,
+        prompt_version: str,
+        prompt_hash: str,
+        model: str,
+    ) -> bool:
+        with self._connect() as connection:
+            try:
+                connection.execute(
+                    """INSERT INTO ai_decisions
+                    (decision_id, evidence_snapshot_hash, prompt_version, prompt_hash,
+                     model, created_at, validation_status)
+                    VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS')""",
+                    (
+                        decision_id,
+                        evidence_snapshot_hash,
+                        prompt_version,
+                        prompt_hash,
+                        model,
+                        _iso(),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                return False
+        return True
+
+    def get_ai_decision(
+        self,
+        *,
+        evidence_snapshot_hash: str,
+        prompt_version: str,
+        prompt_hash: str,
+        model: str,
+    ) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT * FROM ai_decisions
+                WHERE evidence_snapshot_hash = ? AND prompt_version = ?
+                  AND prompt_hash = ? AND model = ?""",
+                (evidence_snapshot_hash, prompt_version, prompt_hash, model),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            **dict(row),
+            "response": (
+                None
+                if row["response_json"] is None
+                else json.loads(str(row["response_json"]))
+            ),
+        }
+
+    def complete_ai_decision(
+        self,
+        *,
+        decision_id: str,
+        response: dict[str, Any],
+        abstention: bool,
+        latency_ms: int,
+        validation_status: str,
+        retry_count: int,
+    ) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """UPDATE ai_decisions
+                SET completed_at = ?, response_json = ?, abstention = ?, latency_ms = ?,
+                    validation_status = ?, retry_count = ?
+                WHERE decision_id = ? AND validation_status = 'IN_PROGRESS'""",
+                (
+                    _iso(),
+                    json.dumps(response, sort_keys=True, default=str),
+                    int(abstention),
+                    latency_ms,
+                    validation_status,
+                    retry_count,
+                    decision_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise EvidenceStoreError(
+                    f"AI decision {decision_id} was missing or already completed"
+                )
+
+    def record_ai_attempt(
+        self,
+        *,
+        decision_id: str,
+        attempt_number: int,
+        transport_retry: bool,
+        status: str,
+        latency_ms: int | None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO ai_decision_attempts
+                (decision_id, attempt_number, occurred_at, transport_retry, status, latency_ms)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    decision_id,
+                    attempt_number,
+                    _iso(),
+                    int(transport_retry),
+                    status,
+                    latency_ms,
+                ),
+            )
+
+    def ai_decision_attempts(self, decision_id: str) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT decision_id, attempt_number, occurred_at, transport_retry,
+                status, latency_ms FROM ai_decision_attempts
+                WHERE decision_id = ? ORDER BY attempt_number""",
+                (decision_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
 
 def write_emergency_incident(path: Path, incident: dict[str, Any]) -> None:

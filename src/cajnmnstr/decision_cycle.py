@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
 import statistics
+import time
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
@@ -47,6 +49,7 @@ uncertainty, and a falsifiable structured invalidation supported by Passport evi
 Do not calculate features, select contracts, size positions, invoke tools, or claim order authority.
 Stale, invalid, weak, or conflicting evidence should produce NO_TRADE when direction is unsupported.
 """
+TERRA_REPLAY_PROMPT_VERSION = "terra-replay-v1"
 
 
 def _decimal(value: Any) -> Decimal:
@@ -87,6 +90,32 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return value
+
+
+def _analysis_payload(analysis: AnalysisResult) -> dict[str, Any]:
+    return _json_safe(asdict(analysis))
+
+
+def _analysis_from_payload(payload: dict[str, Any]) -> AnalysisResult:
+    return AnalysisResult(
+        provider=str(payload["provider"]),
+        requested_model=str(payload["requested_model"]),
+        resolved_model=str(payload["resolved_model"]),
+        proposal=validate_proposal(payload["proposal"]),
+        authority_disposition=str(payload["authority_disposition"]),
+        failure_code=(
+            None if payload.get("failure_code") is None else str(payload["failure_code"])
+        ),
+        failure_detail=(
+            None if payload.get("failure_detail") is None else str(payload["failure_detail"])
+        ),
+        input_tokens=(
+            None if payload.get("input_tokens") is None else int(payload["input_tokens"])
+        ),
+        output_tokens=(
+            None if payload.get("output_tokens") is None else int(payload["output_tokens"])
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +214,11 @@ class ReplayDecisionResult:
     referee: RefereeDecision
     selection: OptionSelectionResult
     operator_review: OperatorReviewResult
+    decision_id: str
+    evidence_snapshot_hash: str
+    prompt_hash: str
+    ai_latency_ms: int
+    ai_cached: bool
 
 
 class FixtureAnalysisProvider:
@@ -193,6 +227,10 @@ class FixtureAnalysisProvider:
     def __init__(self, proposals: dict[str, dict[str, Any]]) -> None:
         self._proposals = proposals
 
+    @property
+    def model_name(self) -> str:
+        return "gpt-5.6-terra-replay-fixture"
+
     def analyze(self, *, instructions: str, evidence_json: str) -> AnalysisResult:
         del instructions
         evidence = json.loads(evidence_json)
@@ -200,8 +238,8 @@ class FixtureAnalysisProvider:
         proposal = validate_proposal(self._proposals[scenario_id])
         return AnalysisResult(
             provider="fixture",
-            requested_model="gpt-5.6-terra-replay-fixture",
-            resolved_model="gpt-5.6-terra-replay-fixture",
+            requested_model=self.model_name,
+            resolved_model=self.model_name,
             proposal=proposal,
             authority_disposition=(
                 "ABSTAIN"
@@ -685,15 +723,42 @@ class ReplayOptionSelector:
                     for value in (item.delta, item.gamma, item.theta, item.vega, item.rho)
                 ):
                     reason = "MISSING_GREEKS"
+                elif any(
+                    not value.is_finite()
+                    for value in (item.delta, item.gamma, item.theta, item.vega, item.rho)
+                    if value is not None
+                ) or (item.gamma is not None and item.gamma < 0) or (
+                    item.vega is not None and item.vega < 0
+                ):
+                    reason = "INVALID_GREEKS"
+                elif (
+                    item.implied_volatility is None
+                    or not item.implied_volatility.is_finite()
+                    or item.implied_volatility <= 0
+                ):
+                    reason = "IV_INVALID"
                 elif (
                     item.bid_price is None
                     or item.ask_price is None
+                    or not item.bid_price.is_finite()
+                    or not item.ask_price.is_finite()
                     or item.bid_price <= 0
                     or item.ask_price < item.bid_price
                 ):
                     reason = "QUOTE_INVALID"
+                elif (
+                    item.bid_size is None
+                    or item.ask_size is None
+                    or not item.bid_size.is_finite()
+                    or not item.ask_size.is_finite()
+                    or item.bid_size <= 0
+                    or item.ask_size <= 0
+                ):
+                    reason = "QUOTE_LIQUIDITY_INVALID"
                 elif item.quote_at is None:
                     reason = "QUOTE_TIMESTAMP_MISSING"
+                elif item.quote_at.tzinfo is None:
+                    reason = "QUOTE_TIMESTAMP_INVALID"
                 else:
                     quote_age = Decimal(
                         str((snapshot.decision_at - item.quote_at.astimezone(UTC)).total_seconds())
@@ -736,6 +801,8 @@ class ReplayOptionSelector:
             return self._none("NO_SUITABLE_CONTRACT", rejection_counts)
         _, selected, expiration, dte, spread_ratio = min(eligible, key=lambda item: item[0])
         assert selected.ask_price is not None
+        assert selected.bid_price is not None
+        assert selected.quote_at is not None
         assert selected.delta is not None
         assert referee.max_quantity is not None
         candidate = OrderCandidate(
@@ -745,6 +812,9 @@ class ReplayOptionSelector:
             limit_price=selected.ask_price,
             client_order_id=f"cajnmnstr-replay-{scenario_id}",
             position_intent="buy_to_open",
+            decision_bid=selected.bid_price,
+            decision_ask=selected.ask_price,
+            quote_at=selected.quote_at,
         )
         return OptionSelectionResult(
             candidate=candidate,
@@ -920,12 +990,7 @@ class ReplayDecisionPipeline:
                 protective_action="BLOCK actionable authority and stop before broker submission.",
             )
 
-        evidence_json = json.dumps(snapshot.terra_payload(), sort_keys=True)
-        analysis = self.analysis_provider.analyze(
-            instructions=TERRA_REPLAY_INSTRUCTIONS,
-            evidence_json=evidence_json,
-        )
-        analysis = self._validate_citations(snapshot, analysis)
+        analysis, decision_meta = self._canonical_analysis(snapshot)
         proposal_payload = _json_safe(asdict(analysis.proposal))
         self.journal.append_event(
             EventType.PROPOSAL,
@@ -941,6 +1006,7 @@ class ReplayDecisionPipeline:
                 "failure_code": analysis.failure_code,
                 "input_tokens": analysis.input_tokens,
                 "output_tokens": analysis.output_tokens,
+                **decision_meta,
                 "replay_only": True,
             },
             protective_action=(
@@ -983,6 +1049,14 @@ class ReplayDecisionPipeline:
                 "failure_code": analysis.failure_code,
                 "input_tokens": analysis.input_tokens,
                 "output_tokens": analysis.output_tokens,
+                "decision_id": decision_meta["decision_id"],
+                "evidence_snapshot_hash": decision_meta["evidence_snapshot_hash"],
+                "prompt_version": decision_meta["prompt_version"],
+                "prompt_hash": decision_meta["prompt_hash"],
+                "latency_ms": decision_meta["latency_ms"],
+                "validation_status": decision_meta["validation_status"],
+                "retry_count": decision_meta["retry_count"],
+                "cached": decision_meta["cached"],
             },
             "referee": _json_safe(asdict(referee)),
             "option_selection": _json_safe(asdict(selection)),
@@ -1014,7 +1088,128 @@ class ReplayDecisionPipeline:
             referee=referee,
             selection=selection,
             operator_review=confirmed,
+            decision_id=str(decision_meta["decision_id"]),
+            evidence_snapshot_hash=str(decision_meta["evidence_snapshot_hash"]),
+            prompt_hash=str(decision_meta["prompt_hash"]),
+            ai_latency_ms=int(decision_meta["latency_ms"]),
+            ai_cached=bool(decision_meta["cached"]),
         )
+
+    def _canonical_analysis(
+        self,
+        snapshot: EvidenceSnapshot,
+    ) -> tuple[AnalysisResult, dict[str, Any]]:
+        terra_payload = snapshot.terra_payload()
+        evidence_json = json.dumps(terra_payload, sort_keys=True, separators=(",", ":"))
+        epoch_payload = dict(terra_payload)
+        epoch_payload.pop("scenario_id", None)
+        epoch_json = json.dumps(epoch_payload, sort_keys=True, separators=(",", ":"))
+        evidence_snapshot_hash = hashlib.sha256(epoch_json.encode("utf-8")).hexdigest()
+        prompt_hash = hashlib.sha256(TERRA_REPLAY_INSTRUCTIONS.encode("utf-8")).hexdigest()
+        model = str(
+            getattr(
+                self.analysis_provider,
+                "model_name",
+                type(self.analysis_provider).__name__,
+            )
+        )
+        decision_key = "|".join(
+            (
+                evidence_snapshot_hash,
+                TERRA_REPLAY_PROMPT_VERSION,
+                prompt_hash,
+                model,
+            )
+        )
+        decision_id = f"terra-{hashlib.sha256(decision_key.encode('utf-8')).hexdigest()[:32]}"
+        claimed = self.journal.claim_ai_decision(
+            decision_id=decision_id,
+            evidence_snapshot_hash=evidence_snapshot_hash,
+            prompt_version=TERRA_REPLAY_PROMPT_VERSION,
+            prompt_hash=prompt_hash,
+            model=model,
+        )
+        if claimed:
+            started = time.perf_counter_ns()
+            try:
+                analysis = self.analysis_provider.analyze(
+                    instructions=TERRA_REPLAY_INSTRUCTIONS,
+                    evidence_json=evidence_json,
+                )
+            except Exception as exc:
+                analysis = fail_closed_analysis(
+                    model=model,
+                    failure_code="AI_PROVIDER_ERROR",
+                    failure_detail=type(exc).__name__,
+                )
+            latency_ms = max(0, (time.perf_counter_ns() - started) // 1_000_000)
+            analysis = self._validate_citations(snapshot, analysis)
+            validation_status = (
+                "FAIL_CLOSED"
+                if analysis.failure_code is not None
+                else (
+                    "VALID_ABSTAIN"
+                    if analysis.proposal.direction is ProposalDirection.NO_TRADE
+                    else "VALID"
+                )
+            )
+            self.journal.record_ai_attempt(
+                decision_id=decision_id,
+                attempt_number=1,
+                transport_retry=False,
+                status=analysis.failure_code or "COMPLETED",
+                latency_ms=latency_ms,
+            )
+            self.journal.complete_ai_decision(
+                decision_id=decision_id,
+                response=_analysis_payload(analysis),
+                abstention=(
+                    analysis.failure_code is not None
+                    or analysis.proposal.direction is ProposalDirection.NO_TRADE
+                ),
+                latency_ms=latency_ms,
+                validation_status=validation_status,
+                retry_count=0,
+            )
+            cached = False
+        else:
+            stored = self.journal.get_ai_decision(
+                evidence_snapshot_hash=evidence_snapshot_hash,
+                prompt_version=TERRA_REPLAY_PROMPT_VERSION,
+                prompt_hash=prompt_hash,
+                model=model,
+            )
+            if stored is None or stored["response"] is None:
+                analysis = fail_closed_analysis(
+                    model=model,
+                    failure_code="AI_DECISION_IN_PROGRESS",
+                    failure_detail="Canonical decision has no completed response",
+                )
+                latency_ms = 0
+                validation_status = "FAIL_CLOSED_IN_PROGRESS"
+            else:
+                analysis = _analysis_from_payload(stored["response"])
+                latency_ms = int(stored["latency_ms"] or 0)
+                validation_status = str(stored["validation_status"])
+            cached = True
+
+        return analysis, {
+            "decision_id": decision_id,
+            "evidence_snapshot_id": decision_id,
+            "evidence_snapshot_hash": evidence_snapshot_hash,
+            "prompt_version": TERRA_REPLAY_PROMPT_VERSION,
+            "prompt_hash": prompt_hash,
+            "model": model,
+            "timestamp": snapshot.decision_at.isoformat(),
+            "latency_ms": latency_ms,
+            "validation_status": validation_status,
+            "abstention": (
+                analysis.failure_code is not None
+                or analysis.proposal.direction is ProposalDirection.NO_TRADE
+            ),
+            "retry_count": 0,
+            "cached": cached,
+        }
 
     @staticmethod
     def _validate_citations(
@@ -1061,6 +1256,11 @@ def results_summary(results: list[ReplayDecisionResult]) -> dict[str, Any]:
                     "terra_direction": result.proposal.direction.value,
                     "terra_uncertainty": result.proposal.uncertainty.value,
                     "terra_failure_code": result.ai_failure_code,
+                    "decision_id": result.decision_id,
+                    "evidence_snapshot_hash": result.evidence_snapshot_hash,
+                    "prompt_hash": result.prompt_hash,
+                    "ai_latency_ms": result.ai_latency_ms,
+                    "ai_cached": result.ai_cached,
                     "input_tokens": result.input_tokens,
                     "output_tokens": result.output_tokens,
                     "referee_verdict": result.referee.verdict.value,

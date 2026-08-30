@@ -265,6 +265,11 @@ class AlpacaAdapter:
             status=_value(order.status),
             quantity=_decimal(order.qty),
             filled_quantity=_decimal(order.filled_qty),
+            filled_avg_price=(
+                _decimal(order.filled_avg_price)
+                if order.filled_avg_price is not None
+                else None
+            ),
             limit_price=_decimal(order.limit_price) if order.limit_price is not None else None,
             submitted_at=order.submitted_at,
             updated_at=order.updated_at,

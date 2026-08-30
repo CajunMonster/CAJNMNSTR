@@ -29,6 +29,7 @@ from cajnmnstr.models import (
     RefereeVerdict,
 )
 from cajnmnstr.services import (
+    BrokerReconciler,
     DeterministicReferee,
     OperatorAuthorityPath,
     PaperExecutionCoordinator,
@@ -43,29 +44,42 @@ class MockBroker:
     ) -> None:
         self.journal = journal
         self.submissions: list[OrderIntent] = []
-        self.positions = positions if positions is not None else [verified_position()]
+        self.positions = positions if positions is not None else []
+        self.orders: list[BrokerOrderSnapshot] = []
+        self.submit_error: Exception | None = None
+        self.fill_price: Decimal | None = None
 
     def submit_limit_order(self, intent: OrderIntent) -> BrokerOrderSnapshot:
         assert self.journal.broker_order_status(intent.client_order_id) == "SUBMISSION_PENDING"
+        if self.submit_error is not None:
+            raise self.submit_error
         self.submissions.append(intent)
         now = datetime.now(UTC)
-        return BrokerOrderSnapshot(
+        order = BrokerOrderSnapshot(
             broker_order_id=f"mock-broker-{len(self.submissions):03d}",
             client_order_id=intent.client_order_id,
             symbol=intent.symbol,
-            status="accepted",
+            status="filled" if self.fill_price is not None else "accepted",
             quantity=Decimal(intent.quantity),
-            filled_quantity=Decimal("0"),
+            filled_quantity=(
+                Decimal(intent.quantity) if self.fill_price is not None else Decimal("0")
+            ),
+            filled_avg_price=self.fill_price,
             limit_price=intent.limit_price,
             submitted_at=now,
             updated_at=now,
         )
+        self.orders.append(order)
+        return order
 
     def get_order_by_client_id(self, client_order_id: str) -> BrokerOrderSnapshot:
         raise AssertionError(f"Duplicate lookup must not occur: {client_order_id}")
 
     def list_positions(self) -> list[PositionSnapshot]:
         return list(self.positions)
+
+    def list_orders(self) -> list[BrokerOrderSnapshot]:
+        return list(self.orders)
 
 
 def verified_position(*, quantity: Decimal = Decimal("2")) -> PositionSnapshot:
@@ -119,6 +133,9 @@ def candidate(
         limit_price=limit_price,
         client_order_id=client_order_id,
         position_intent=position_intent,
+        decision_bid=Decimal("4.20"),
+        decision_ask=Decimal("4.30"),
+        quote_at=datetime.now(UTC),
     )
 
 
@@ -152,7 +169,10 @@ def authority_fixture(
         max_quantity=max_quantity,
         max_limit_price=max_limit_price,
     )
-    broker = MockBroker(journal, positions)
+    resolved_positions = positions
+    if resolved_positions is None:
+        resolved_positions = [verified_position()] if verdict is RefereeVerdict.EXIT else []
+    broker = MockBroker(journal, resolved_positions)
 
     resolved_health = health if health is not None else detailed_health()
 
@@ -811,6 +831,9 @@ def test_direct_coordinator_call_without_operator_authorization_fails_closed(
         client_order_id="cajnmnstr-direct-bypass",
         position_intent="buy_to_open",
         passport_id="passport-001",
+        decision_bid=Decimal("4.20"),
+        decision_ask=Decimal("4.30"),
+        quote_at=datetime.now(UTC),
     )
 
     with pytest.raises(AuthorityDeniedError, match="durable authorization"):
@@ -843,3 +866,144 @@ def test_exit_allows_position_management_and_rejects_new_entry(tmp_path: Path) -
     assert len(broker.submissions) == 1
     assert broker.submissions[0].position_intent == "sell_to_close"
     assert last_transition(journal)["authority_granted"] == "POSITION_MANAGEMENT"
+
+
+def test_fill_records_shadow_execution_quality_against_decision_quote(
+    tmp_path: Path,
+) -> None:
+    journal, broker, _, authority = authority_fixture(tmp_path)
+    broker.fill_price = Decimal("4.28")
+
+    authority.execute(passport_id="passport-001", candidate=candidate())
+
+    record = journal.broker_order_records()[0]
+    quality = record["payload"]["execution_quality"]
+    assert quality["decision_time_bid"] == "4.20"
+    assert quality["decision_time_ask"] == "4.30"
+    assert quality["midpoint"] == "4.25"
+    assert quality["submitted_limit_price"] == "4.25"
+    assert quality["actual_fill_price"] == "4.28"
+    assert Decimal(quality["fill_vs_midpoint"]) == Decimal("0.03")
+    assert quality["pessimistic_reference"] == "ENTRY_AT_ASK"
+    assert quality["official_competition_pnl_replacement"] is False
+
+
+def test_eventual_fill_quality_is_added_during_reconciliation(tmp_path: Path) -> None:
+    journal, broker, _, authority = authority_fixture(tmp_path)
+    authority.execute(passport_id="passport-001", candidate=candidate())
+    original = broker.orders[0]
+    broker.orders[0] = BrokerOrderSnapshot(
+        broker_order_id=original.broker_order_id,
+        client_order_id=original.client_order_id,
+        symbol=original.symbol,
+        status="filled",
+        quantity=original.quantity,
+        filled_quantity=original.quantity,
+        filled_avg_price=Decimal("4.27"),
+        limit_price=original.limit_price,
+        submitted_at=original.submitted_at,
+        updated_at=datetime.now(UTC),
+    )
+
+    report = BrokerReconciler(journal, broker).reconcile()
+
+    assert report.matched
+    record = journal.broker_order_records()[0]
+    assert record["payload"]["execution_quality"]["actual_fill_price"] == "4.27"
+    assert record["payload"]["execution_quality"]["pessimistic_reference"] == (
+        "ENTRY_AT_ASK"
+    )
+
+
+def test_timeout_after_submit_is_unknown_and_cannot_be_blindly_retried(
+    tmp_path: Path,
+) -> None:
+    journal, broker, _, authority = authority_fixture(tmp_path)
+    broker.submit_error = TimeoutError("mock timeout after transport send")
+    order_candidate = candidate(client_order_id="cajnmnstr-submit-timeout")
+
+    with pytest.raises(TimeoutError):
+        authority.execute(passport_id="passport-001", candidate=order_candidate)
+
+    assert journal.broker_order_status(order_candidate.client_order_id) == "SUBMIT_UNKNOWN"
+    record = journal.broker_order_records()[0]
+    assert record["payload"]["reconciliation_required"] is True
+    assert record["payload"]["blind_retry_allowed"] is False
+    with pytest.raises(DuplicateOrderIdentityError):
+        authority.execute(passport_id="passport-001", candidate=order_candidate)
+    with pytest.raises(ExecutionDisabledError, match="reconciliation is required"):
+        authority.execute(
+            passport_id="passport-001",
+            candidate=candidate(client_order_id="cajnmnstr-after-submit-timeout"),
+        )
+    assert broker.submissions == []
+
+
+def test_exit_stays_pending_until_reconciliation_proves_broker_flat(
+    tmp_path: Path,
+) -> None:
+    journal, broker, coordinator, authority = authority_fixture(
+        tmp_path,
+        verdict=RefereeVerdict.EXIT,
+        max_quantity=1,
+        positions=[verified_position(quantity=Decimal("1"))],
+    )
+    exit_candidate = candidate(
+        quantity=1,
+        client_order_id="cajnmnstr-flat-proof-exit",
+        side="sell",
+        position_intent="sell_to_close",
+    )
+    authority.execute(passport_id="passport-001", candidate=exit_candidate)
+    assert journal.broker_order_status(exit_candidate.client_order_id) == (
+        "EXIT_PENDING_RECONCILIATION"
+    )
+
+    first = BrokerReconciler(journal, broker).reconcile()
+    assert first.unverified_flat_client_ids == (exit_candidate.client_order_id,)
+    assert journal.broker_order_status(exit_candidate.client_order_id) == (
+        "EXIT_PENDING_RECONCILIATION"
+    )
+
+    journal.create_passport("passport-002", {"symbol": "SPY"})
+    journal.seal_passport("passport-002", {"symbol": "SPY", "sealed": True})
+    DeterministicReferee(journal).issue(
+        passport_id="passport-002",
+        verdict=RefereeVerdict.APPROVE,
+        reason_code="MOCK_APPROVE_AFTER_EXIT",
+        max_quantity=1,
+        max_limit_price=Decimal("4.25"),
+    )
+    configured = settings(tmp_path)
+    second_authority = OperatorAuthorityPath(
+        configured,
+        journal,
+        coordinator,
+        lambda: detailed_health(),
+    )
+    with pytest.raises(ExecutionDisabledError, match="reconciliation is required"):
+        second_authority.execute(
+            passport_id="passport-002",
+            candidate=candidate(
+                quantity=1,
+                client_order_id="cajnmnstr-entry-before-flat",
+            ),
+        )
+
+    broker.positions = []
+    second = BrokerReconciler(journal, broker).reconcile()
+    assert second.unverified_flat_client_ids == ()
+    assert journal.broker_order_status(exit_candidate.client_order_id) == (
+        "CLOSED_BROKER_FLAT"
+    )
+    third = BrokerReconciler(journal, broker).reconcile()
+    assert third.unverified_flat_client_ids == ()
+    assert journal.broker_order_status(exit_candidate.client_order_id) == (
+        "CLOSED_BROKER_FLAT"
+    )
+    flat_events = [
+        event
+        for event in journal.list_events(EventType.RECONCILIATION)
+        if event["payload"].get("reason_code") == "BROKER_FLAT_VERIFIED"
+    ]
+    assert len(flat_events) == 1
