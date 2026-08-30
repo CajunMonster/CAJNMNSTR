@@ -1,0 +1,10 @@
+{
+  "app": "CAJNMNSTR",
+  "mode": "local-prototype",
+  "state": "PAUSED",
+  "execution": "disabled",
+  "alpaca": "paper_authenticated_read_only",
+  "ai_provider": "terra_fixture_verified",
+  "market_data": "representative",
+  "protective_action": "block_proposals_and_orders"
+}

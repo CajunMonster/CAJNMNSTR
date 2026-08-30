@@ -1,0 +1,47 @@
+{
+  "snapshots": {
+    "SPY260918C00540000": {
+      "latestQuote": {
+        "t": "2026-08-28T15:30:00.123456Z",
+        "bp": 4.2,
+        "bs": 18,
+        "ap": 4.3,
+        "as": 12
+      },
+      "latestTrade": {
+        "t": "2026-08-28T15:29:58.654321Z",
+        "p": 4.25,
+        "s": 1
+      },
+      "impliedVolatility": 0.1684,
+      "greeks": {
+        "delta": 0.4621,
+        "gamma": 0.031,
+        "theta": -0.083,
+        "vega": 0.112
+      }
+    },
+    "SPY260918P00530000": {
+      "latestQuote": {
+        "t": "2026-08-28T15:30:00.223456Z",
+        "bp": 3.1,
+        "bs": 9,
+        "ap": 3.2,
+        "as": 15
+      },
+      "latestTrade": {
+        "t": "2026-08-28T15:29:57.654321Z",
+        "p": 3.15,
+        "s": 2
+      },
+      "impliedVolatility": 0.1721,
+      "greeks": {
+        "delta": -0.381,
+        "gamma": 0.029,
+        "theta": -0.077,
+        "vega": 0.107
+      }
+    }
+  },
+  "next_page_token": null
+}

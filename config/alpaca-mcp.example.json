@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "alpaca-market-readonly": {
+      "command": "uvx",
+      "args": ["alpaca-mcp-server==2.3.0"],
+      "env": {
+        "ALPACA_API_KEY": "SET_ONLY_IN_YOUR_LOCAL_MCP_CLIENT",
+        "ALPACA_SECRET_KEY": "SET_ONLY_IN_YOUR_LOCAL_MCP_CLIENT",
+        "ALPACA_PAPER_TRADE": "true",
+        "ALPACA_TOOLSETS": "assets,stock-data,options-data,news"
+      }
+    }
+  }
+}
