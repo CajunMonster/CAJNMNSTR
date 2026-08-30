@@ -2,7 +2,8 @@
 
 This is the local CAJNMNSTR dashboard and paper-integration preparation workspace.
 
-- The displayed market and account values are representative demo data, not a live account rendering.
+- The dashboard displays a sanitized authenticated PAPER snapshot or an explicitly labeled replay;
+  the browser never connects directly to Alpaca.
 - The dedicated paper account has passed authenticated read-only verification; credentials remain local and Git-ignored.
 - Algo Trader Plus SIP and OPRA access has passed authenticated read-only verification.
 - Closed-market stale data keeps operational health `PAUSED` and cannot produce execution authority.

@@ -21,6 +21,13 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+.npmrc
+.pypirc
 
 # debug
 npm-debug.log*
@@ -37,6 +44,18 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+*.db
+*.sqlite
+*.sqlite3
+*.jsonl
+*.log
+credentials*.json
+secrets*.json
+service-account*.json
+*.bak
+*.tmp
+/screenshots/
+/captures/
 
 # vercel
 .vercel

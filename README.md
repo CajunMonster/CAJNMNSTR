@@ -12,7 +12,7 @@ market evidence → deterministic features → Evidence Passport → AI proposal
 
 The AI may make a case. It never receives trading authority.
 
-## Current weekend checkpoint
+## Competition checkpoint
 
 - Local dashboard: `http://127.0.0.1:8841/`
 - Dedicated Alpaca paper account: authenticated read-only at exactly $100,000, with no positions or open orders at the checkpoint
@@ -28,6 +28,19 @@ The AI may make a case. It never receives trading authority.
 - Terra: the configured adapter completed the nine-case replay with strict structured output; it
   has no broker or execution interface
 - Sol escalation: intentionally not implemented in this preparation slice
+
+## Public demo boundary
+
+The public dashboard is a read-only presentation surface. It consumes sanitized exported JSON
+such as `public/dashboard-state.json` and `public/health.json`; it does not receive Alpaca or
+OpenAI credentials, connect directly to the broker, or expose an execution endpoint. A public
+deployment should show either an explicitly labeled replay or a sanitized recorded PAPER
+Passport. Broker-connected collection, AI calls, the SQLite journal, credentials, account and
+order identifiers, execution confirmation, and operator controls remain local.
+
+Visitors cannot enable entry authority, change risk settings, invoke MCP, or submit orders from
+the deployed dashboard. Public JSON must be regenerated through the local sanitization boundary
+and reviewed before a new deployment.
 
 ## Architecture
 
@@ -46,7 +59,20 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the authority boundary,
 [docs/REPLAY_DECISION_CYCLE.md](docs/REPLAY_DECISION_CYCLE.md) for the replay pipeline and
 measured verdicts, [docs/OPRA_ENTITLEMENT.md](docs/OPRA_ENTITLEMENT.md) for the verified SIP/OPRA
 entitlement, and [docs/TONIGHT_OWNER_CHECKLIST.md](docs/TONIGHT_OWNER_CHECKLIST.md) for the
-credential and first-test sequence.
+credential and first-test sequence. A concise competition narrative is available in
+[docs/SUBMISSION_WRITEUP.md](docs/SUBMISSION_WRITEUP.md).
+
+## Scope and limitations
+
+- CAJNMNSTR is a hackathon PAPER-trading prototype, not a production trading system or financial
+  advice.
+- Its competition scope is SPY long calls and long puts. Other asset cards and strategies are not
+  part of the system.
+- No profitability, fill quality, uptime, or live-capital safety claim is made.
+- Alpaca paper fills and replay outcomes do not establish expected real-market performance.
+- Closed, stale, incomplete, or unreconciled states remain non-actionable.
+- Entry authority is disabled by default. AI output never overrides deterministic risk,
+  authority, execution, or reconciliation code.
 
 ## Local setup
 
@@ -96,3 +122,7 @@ The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
 `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED`, and `CAJNMNSTR_BROKER_LOCK`; conflicting legacy and
 explicit entry values fail closed.
+
+## License
+
+Released under the [MIT License](LICENSE).
