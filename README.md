@@ -83,6 +83,7 @@ Requirements:
 - uv/uvx
 
 ```powershell
+pnpm install --frozen-lockfile
 uv sync --dev
 Copy-Item .env.example .env.local
 uv run cajnmnstr config-check
@@ -112,6 +113,9 @@ uv run cajnmnstr health --live
 uv run cajnmnstr live-decision --dashboard-path public/dashboard-state.json
 ```
 
+The checked-in public dashboard works from sanitized JSON without credentials. Authenticated
+commands are optional local operator steps and must use the dedicated Alpaca PAPER endpoint.
+
 These commands read account, clock, SPY quote, option contracts, option chain, and provider
 health; they cannot submit an order. `live-decision` also reads completed five-minute SIP bars,
 normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and selector, seals the
@@ -122,6 +126,14 @@ The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
 `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED`, and `CAJNMNSTR_BROKER_LOCK`; conflicting legacy and
 explicit entry values fail closed.
+
+## Demo and submission material
+
+The judge-facing descriptions, technology list, architecture summary, limitations, demo narrative,
+video script, pitch outline, and unposted social drafts are collected in
+[docs/DEMO_AND_SUBMISSION_PLAN.md](docs/DEMO_AND_SUBMISSION_PLAN.md). All demo material must preserve
+the visible `PAPER`, `REPLAY`, `PAUSED`, freshness, and broker-submission labels shown by the source
+snapshot.
 
 ## License
 

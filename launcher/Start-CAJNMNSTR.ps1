@@ -13,7 +13,15 @@ $vinextShim = Join-Path $projectRoot 'node_modules\.bin\vinext.CMD'
 function Test-CAJNMNSTRHealth {
     try {
         $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2
-        return $health.app -eq 'CAJNMNSTR' -and $health.mode -eq 'local-prototype'
+        $knownState = $health.state -in @('HEALTHY', 'DEGRADED', 'PAUSED')
+        $readOnlyMode = $health.mode -in @('PAPER_READ_ONLY', 'REPLAY_READ_ONLY')
+        $brokerSubmissionBlocked = $health.broker_submission_allowed -eq $false
+        return (
+            $health.app -eq 'CAJNMNSTR' -and
+            $knownState -and
+            $readOnlyMode -and
+            $brokerSubmissionBlocked
+        )
     }
     catch {
         return $false
