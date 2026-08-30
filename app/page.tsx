@@ -192,7 +192,7 @@ function CandlestickChart({ candles }: { candles: Candle[] }) {
   const y = (value: number) => ((highest - value) / range) * 100;
 
   return (
-    <div className="candle-chart" aria-label="SPY replay candlestick chart">
+    <div className="candle-chart" aria-label="SPY candlestick chart">
       <div className="chart-grid" aria-hidden="true" />
       <div className="candles">
         {candles.map((candle) => {
@@ -257,7 +257,7 @@ function OptionsPanel({ state }: { state: DashboardState }) {
         <div><span>ATM IV</span><strong>{state.options.atm_iv === null ? "—" : `${state.options.atm_iv.toFixed(2)}%`}</strong></div>
         <div><span>SKEW</span><strong>{state.options.skew === null ? "N/A" : `${state.options.skew.toFixed(2)}%`}</strong></div>
       </div>
-      <div className="iv-surface" aria-label="Replay option implied volatility comparison">
+      <div className="iv-surface" aria-label="Option implied volatility comparison">
         {state.options.surface.map((item) => (
           <div key={item.label}><i style={{ height: `${Math.max(18, (item.value / maximum) * 100)}%` }} /><span>{item.label}</span></div>
         ))}
@@ -290,7 +290,7 @@ function DecisionPanel({ state }: { state: DashboardState }) {
         <div><span>MAX DEBIT AUTHORITY</span><strong>{money(state.decision.authority_max_debit)}</strong></div>
         <div><span>PROPOSED RISK</span><strong>{money(state.decision.risk_amount)} · {state.decision.risk_percent === null ? "—" : `${state.decision.risk_percent.toFixed(2)}%`}</strong></div>
       </div>
-      <div className="decision-warning"><span>UNCERTAINTY</span><strong>{state.decision.uncertainty}</strong><p>Replay candidate only. No client-order identity was reserved.</p></div>
+      <div className="decision-warning"><span>UNCERTAINTY</span><strong>{state.decision.uncertainty}</strong><p>{state.mode === "REPLAY" ? "Replay candidate only." : "Paper review only."} No client-order identity was reserved.</p></div>
     </MetalPanel>
   );
 }

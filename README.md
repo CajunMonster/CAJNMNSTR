@@ -16,7 +16,8 @@ The AI may make a case. It never receives trading authority.
 
 - Local dashboard: `http://127.0.0.1:8841/`
 - Dedicated Alpaca paper account: authenticated read-only at exactly $100,000, with no positions or open orders at the checkpoint
-- Market/account values in the UI: representative; closed-market data remains `PAUSED` and non-actionable
+- Market/account values in the UI: authenticated read-only PAPER/SIP/OPRA state; closed-market
+  data remains `PAUSED` and non-actionable
 - Market-data entitlement: Algo Trader Plus verified read-only with SIP equities and OPRA options
 - Alpaca and OpenAI credentials: local only and intentionally absent from the repository
 - New-entry authority: disabled by default and independent from deterministic position management
@@ -37,6 +38,8 @@ The AI may make a case. It never receives trading authority.
 - **Health Supervisor** reports `HEALTHY`, `DEGRADED`, or `PAUSED` and attaches a protective action to critical failures.
 - **Replay Decision Cycle** calculates the approved small feature set, validates Terra citations,
   distinguishes hard and soft Referee gates, and selects only eligible SPY options.
+- **Live Evidence Snapshot** normalizes authenticated PAPER account, SIP bars/quotes, and OPRA
+  option snapshots through that same decision contract, then stops before broker submission.
 - **Model-neutral AI port** supports provider adapters without giving any provider broker access.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the authority boundary,
@@ -80,11 +83,14 @@ Authenticated read-only verification commands are:
 ```powershell
 uv run cajnmnstr verify-alpaca
 uv run cajnmnstr health --live
+uv run cajnmnstr live-decision --dashboard-path public/dashboard-state.json
 ```
 
 These commands read account, clock, SPY quote, option contracts, option chain, and provider
-health; they cannot submit an order. `verify-terra` and `replay-cycle --live-terra` send only
-checked-in replay evidence to OpenAI and accept analysis output only.
+health; they cannot submit an order. `live-decision` also reads completed five-minute SIP bars,
+normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and selector, seals the
+Passport, updates the dashboard, and stops at operator review. `verify-terra` and
+`replay-cycle --live-terra` send only checked-in replay evidence to OpenAI.
 
 The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,

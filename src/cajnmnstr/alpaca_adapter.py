@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +14,7 @@ from .models import (
     OptionContractSnapshot,
     OrderIntent,
     PositionSnapshot,
+    StockBarSnapshot,
 )
 from .option_chain import parse_option_chain_payload
 
@@ -118,6 +119,51 @@ class AlpacaAdapter:
             observed_at=quote.timestamp,
             feed=selected_feed,
         )
+
+    def get_spy_bars(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        timeframe_minutes: int,
+        feed: str | None = None,
+    ) -> list[StockBarSnapshot]:
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+
+        selected_feed = feed or self.settings.stock_feed
+        response = self._stock.get_stock_bars(
+            StockBarsRequest(
+                symbol_or_symbols=["SPY"],
+                timeframe=TimeFrame(timeframe_minutes, TimeFrameUnit.Minute),
+                start=start,
+                end=end,
+                feed=self._stock_feeds[selected_feed],
+            )
+        )
+        return self._bars(response.data.get("SPY", []), selected_feed, timeframe_minutes)
+
+    def get_spy_daily_bars(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        feed: str | None = None,
+    ) -> list[StockBarSnapshot]:
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame
+
+        selected_feed = feed or self.settings.stock_feed
+        response = self._stock.get_stock_bars(
+            StockBarsRequest(
+                symbol_or_symbols=["SPY"],
+                timeframe=TimeFrame.Day,
+                start=start,
+                end=end,
+                feed=self._stock_feeds[selected_feed],
+            )
+        )
+        return self._bars(response.data.get("SPY", []), selected_feed, None)
 
     def get_option_contracts(
         self,
@@ -255,6 +301,28 @@ class AlpacaAdapter:
     def cancel_order(self, broker_order_id: str) -> None:
         self.settings.require_position_management_armed()
         self._trading.cancel_order_by_id(broker_order_id)
+
+    @staticmethod
+    def _bars(
+        bars: list[Any],
+        feed: str,
+        timeframe_minutes: int | None,
+    ) -> list[StockBarSnapshot]:
+        return [
+            StockBarSnapshot(
+                symbol="SPY",
+                timestamp=bar.timestamp,
+                timeframe_minutes=timeframe_minutes,
+                open=_decimal(bar.open),
+                high=_decimal(bar.high),
+                low=_decimal(bar.low),
+                close=_decimal(bar.close),
+                volume=_decimal(bar.volume),
+                vwap=_decimal(bar.vwap) if bar.vwap is not None else None,
+                feed=feed,
+            )
+            for bar in bars
+        ]
 
     @staticmethod
     def _order(order: Any) -> BrokerOrderSnapshot:

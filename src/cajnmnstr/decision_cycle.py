@@ -50,6 +50,16 @@ Do not calculate features, select contracts, size positions, invoke tools, or cl
 Stale, invalid, weak, or conflicting evidence should produce NO_TRADE when direction is unsupported.
 """
 TERRA_REPLAY_PROMPT_VERSION = "terra-replay-v1"
+TERRA_LIVE_INSTRUCTIONS = """You are the CAJNMNSTR Terra analyst.
+Analyze only the supplied authenticated Alpaca PAPER Evidence Snapshot.
+Choose LONG_CALL, LONG_PUT, or NO_TRADE for the INTRADAY horizon.
+Cite only Evidence IDs present in the Snapshot. State the strongest counterargument,
+uncertainty, and a falsifiable structured invalidation supported by Snapshot evidence IDs.
+Do not calculate features, select contracts, size positions, invoke tools, or claim order authority.
+Stale, closed-session, invalid, weak, or conflicting evidence must produce NO_TRADE.
+You have no broker interface and the workflow always stops before submission.
+"""
+TERRA_LIVE_PROMPT_VERSION = "terra-live-v1"
 
 
 def _decimal(value: Any) -> Decimal:
@@ -140,10 +150,12 @@ class EvidenceSnapshot:
     evidence: tuple[dict[str, Any], ...]
     hard_failures: tuple[str, ...]
     stale_sources: tuple[str, ...]
-    replay_fresh: bool
+    actionable_fresh: bool
     option_chain: tuple[OptionChainSnapshot, ...]
     market_set: str
     option_set: str
+    source_mode: str
+    source_provenance: dict[str, Any]
 
     @property
     def evidence_ids(self) -> set[str]:
@@ -152,16 +164,17 @@ class EvidenceSnapshot:
     def terra_payload(self) -> dict[str, Any]:
         return _json_safe(
             {
-                "passport_mode": "REPLAY_ONLY",
+                "passport_mode": self.source_mode,
                 "scenario_id": self.scenario_id,
                 "symbol": self.symbol,
                 "decision_at": self.decision_at,
+                "provenance": self.source_provenance,
                 "features": self.features,
                 "evidence": self.evidence,
                 "data_quality": {
                     "hard_failures": self.hard_failures,
                     "stale_sources": self.stale_sources,
-                    "replay_fresh": self.replay_fresh,
+                    "actionable_fresh": self.actionable_fresh,
                 },
                 "constraints": {
                     "execution_allowed": False,
@@ -254,7 +267,14 @@ class FixtureAnalysisProvider:
 
 
 class EvidenceCalculator:
-    def build(self, document: dict[str, Any], scenario: dict[str, Any]) -> EvidenceSnapshot:
+    def build(
+        self,
+        document: dict[str, Any],
+        scenario: dict[str, Any],
+        *,
+        source_mode: str = "REPLAY_ONLY",
+        source_provenance: dict[str, Any] | None = None,
+    ) -> EvidenceSnapshot:
         scenario_id = str(scenario["scenario_id"])
         market_set_name = str(scenario["market_set"])
         option_set_name = str(scenario["option_set"])
@@ -485,8 +505,15 @@ class EvidenceCalculator:
                     simple_skew = atm_put.implied_volatility - atm_call.implied_volatility
             add_feature("feature:simple_skew", "simple_skew", simple_skew, "iv_difference")
 
-        events = market.get("events", [])
-        event_state = "CLEAR" if not events else ", ".join(str(item["name"]) for item in events)
+        events = market.get("events")
+        if events is None:
+            event_state = "UNAVAILABLE"
+        else:
+            event_state = (
+                "CLEAR"
+                if not events
+                else ", ".join(str(item["name"]) for item in events)
+            )
         add_feature(
             "context:event_calendar",
             "event_calendar_state",
@@ -515,12 +542,12 @@ class EvidenceCalculator:
             age = Decimal(str((decision_at - observed_at).total_seconds()))
             if age < 0 or age > MAX_REPLAY_QUOTE_AGE_SECONDS:
                 stale_sources.append(name)
-        replay_fresh = not stale_sources
+        actionable_fresh = not stale_sources
         evidence.append(
             {
                 "id": "data:freshness",
                 "kind": "data_health",
-                "replay_fresh": replay_fresh,
+                "actionable_fresh": actionable_fresh,
                 "stale_sources": stale_sources,
                 "maximum_age_seconds": MAX_REPLAY_QUOTE_AGE_SECONDS,
             }
@@ -545,10 +572,20 @@ class EvidenceCalculator:
             evidence=tuple(evidence),
             hard_failures=tuple(sorted(set(hard_failures))),
             stale_sources=tuple(stale_sources),
-            replay_fresh=replay_fresh,
+            actionable_fresh=actionable_fresh,
             option_chain=tuple(chain),
             market_set=market_set_name,
             option_set=option_set_name,
+            source_mode=source_mode,
+            source_provenance=(
+                source_provenance
+                if source_provenance is not None
+                else {
+                    "fixture_id": str(document["fixture_id"]),
+                    "market_set": market_set_name,
+                    "option_set": option_set_name,
+                }
+            ),
         )
 
 
@@ -567,10 +604,10 @@ class ReplayRefereePolicy:
                 max_quantity=None,
                 max_limit_price=None,
             )
-        if not snapshot.replay_fresh:
+        if not snapshot.actionable_fresh:
             return RefereeDecision(
                 verdict=RefereeVerdict.BLOCK,
-                reason_code="STALE_REPLAY_EVIDENCE",
+                reason_code="STALE_EVIDENCE",
                 support_count=0,
                 opposition_count=0,
                 max_quantity=None,
@@ -805,12 +842,13 @@ class ReplayOptionSelector:
         assert selected.quote_at is not None
         assert selected.delta is not None
         assert referee.max_quantity is not None
+        preview_mode = "replay" if snapshot.source_mode == "REPLAY_ONLY" else "live-preview"
         candidate = OrderCandidate(
             symbol=selected.symbol,
             quantity=referee.max_quantity,
             side="buy",
             limit_price=selected.ask_price,
-            client_order_id=f"cajnmnstr-replay-{scenario_id}",
+            client_order_id=f"cajnmnstr-{preview_mode}-{scenario_id}",
             position_intent="buy_to_open",
             decision_bid=selected.bid_price,
             decision_ask=selected.ask_price,
@@ -842,11 +880,13 @@ class ReplayOptionSelector:
 
 
 class OperatorReviewGate:
-    """Confirms replay eligibility without reserving identity or invoking a coordinator."""
+    """Confirms review eligibility without reserving identity or invoking a coordinator."""
 
     def __init__(self, settings: Settings, journal: Journal) -> None:
         if settings.entry_enabled or settings.entry_armed:
-            raise ConfigurationError("Replay review requires entry authority disabled and unarmed")
+            raise ConfigurationError(
+                "Decision review requires entry authority disabled and unarmed"
+            )
         self.settings = settings
         self.journal = journal
 
@@ -854,6 +894,8 @@ class OperatorReviewGate:
         self,
         decision: RefereeDecision,
         selection: OptionSelectionResult,
+        *,
+        source_mode: str = "REPLAY_ONLY",
     ) -> OperatorReviewResult:
         if (
             decision.verdict not in {RefereeVerdict.APPROVE, RefereeVerdict.REDUCE}
@@ -879,7 +921,11 @@ class OperatorReviewGate:
             state="READY_FOR_OPERATOR_REVIEW",
             authority=authority,
             broker_submission_allowed=False,
-            reason_code="REPLAY_STOP_BEFORE_BROKER",
+            reason_code=(
+                "REPLAY_STOP_BEFORE_BROKER"
+                if source_mode == "REPLAY_ONLY"
+                else "LIVE_STOP_BEFORE_BROKER"
+            ),
         )
 
     def confirm(
@@ -888,8 +934,9 @@ class OperatorReviewGate:
         passport_id: str,
         decision: RefereeDecision,
         selection: OptionSelectionResult,
+        source_mode: str = "REPLAY_ONLY",
     ) -> OperatorReviewResult:
-        result = self.preview(decision, selection)
+        result = self.preview(decision, selection, source_mode=source_mode)
         stored_referee = self.journal.get_referee_result(passport_id)
         if self.journal.passport_state(passport_id) != "SEALED" or stored_referee is None:
             result = OperatorReviewResult(
@@ -900,7 +947,11 @@ class OperatorReviewGate:
             )
         self.journal.append_event(
             EventType.AUTHORITY_TRANSITION,
-            source="replay_operator_review_gate",
+            source=(
+                "replay_operator_review_gate"
+                if source_mode == "REPLAY_ONLY"
+                else "live_operator_review_gate"
+            ),
             passport_id=passport_id,
             correlation_id=(
                 None
@@ -922,7 +973,7 @@ class OperatorReviewGate:
 
 
 class ReplayDecisionPipeline:
-    """Replay-only vertical slice. It has no broker or execution coordinator dependency."""
+    """Execution-free normalized decision slice with no broker coordinator dependency."""
 
     def __init__(
         self,
@@ -955,18 +1006,32 @@ class ReplayDecisionPipeline:
         scenario: dict[str, Any],
     ) -> ReplayDecisionResult:
         snapshot = self.calculator.build(document, scenario)
-        passport_id = f"replay-{snapshot.scenario_id}-{uuid.uuid4().hex[:10]}"
+        return self.run_snapshot(
+            snapshot,
+            instructions=TERRA_REPLAY_INSTRUCTIONS,
+            prompt_version=TERRA_REPLAY_PROMPT_VERSION,
+        )
+
+    def run_snapshot(
+        self,
+        snapshot: EvidenceSnapshot,
+        *,
+        instructions: str,
+        prompt_version: str,
+    ) -> ReplayDecisionResult:
+        """Run one normalized snapshot through Terra, Referee, selector, and safe review."""
+        self.journal.initialize()
+        self.journal.probe()
+        mode_label = "replay" if snapshot.source_mode == "REPLAY_ONLY" else "live"
+        passport_id = f"{mode_label}-{snapshot.scenario_id}-{uuid.uuid4().hex[:10]}"
         open_payload = {
             "passport_version": "1.0",
             "state": "OPEN",
-            "mode": "REPLAY_ONLY",
+            "mode": snapshot.source_mode,
             "scenario_id": snapshot.scenario_id,
             "fixture_id": snapshot.fixture_id,
             "symbol": snapshot.symbol,
-            "provenance": {
-                "market_set": snapshot.market_set,
-                "option_set": snapshot.option_set,
-            },
+            "provenance": snapshot.source_provenance,
             "entry_enabled": self.settings.entry_enabled,
             "entry_armed": self.settings.entry_armed,
             "position_management_enabled": self.settings.position_management_enabled,
@@ -977,11 +1042,11 @@ class ReplayDecisionPipeline:
         if snapshot.hard_failures or snapshot.stale_sources:
             self.journal.append_event(
                 EventType.DATA_HEALTH_FAILURE,
-                source="replay_feature_calculator",
+                source=f"{mode_label}_feature_calculator",
                 passport_id=passport_id,
                 severity="CRITICAL",
                 payload={
-                    "mode": "REPLAY_ONLY",
+                    "mode": snapshot.source_mode,
                     "scenario_id": snapshot.scenario_id,
                     "hard_failures": snapshot.hard_failures,
                     "stale_sources": snapshot.stale_sources,
@@ -990,11 +1055,15 @@ class ReplayDecisionPipeline:
                 protective_action="BLOCK actionable authority and stop before broker submission.",
             )
 
-        analysis, decision_meta = self._canonical_analysis(snapshot)
+        analysis, decision_meta = self._canonical_analysis(
+            snapshot,
+            instructions=instructions,
+            prompt_version=prompt_version,
+        )
         proposal_payload = _json_safe(asdict(analysis.proposal))
         self.journal.append_event(
             EventType.PROPOSAL,
-            source="terra_replay",
+            source=f"terra_{mode_label}",
             passport_id=passport_id,
             severity="INFO" if analysis.failure_code is None else "WARNING",
             payload={
@@ -1007,7 +1076,7 @@ class ReplayDecisionPipeline:
                 "input_tokens": analysis.input_tokens,
                 "output_tokens": analysis.output_tokens,
                 **decision_meta,
-                "replay_only": True,
+                "source_mode": snapshot.source_mode,
             },
             protective_action=(
                 None
@@ -1023,7 +1092,11 @@ class ReplayDecisionPipeline:
             direction=analysis.proposal.direction,
             referee=referee,
         )
-        preview = self.review_gate.preview(referee, selection)
+        preview = self.review_gate.preview(
+            referee,
+            selection,
+            source_mode=snapshot.source_mode,
+        )
         self.journal.append_event(
             EventType.PROPOSAL,
             source="deterministic_option_selector",
@@ -1075,6 +1148,7 @@ class ReplayDecisionPipeline:
             passport_id=passport_id,
             decision=referee,
             selection=selection,
+            source_mode=snapshot.source_mode,
         )
         if confirmed != preview:
             raise RuntimeError("Sealed operator review did not match the pre-seal preview")
@@ -1098,14 +1172,21 @@ class ReplayDecisionPipeline:
     def _canonical_analysis(
         self,
         snapshot: EvidenceSnapshot,
+        *,
+        instructions: str,
+        prompt_version: str,
     ) -> tuple[AnalysisResult, dict[str, Any]]:
         terra_payload = snapshot.terra_payload()
         evidence_json = json.dumps(terra_payload, sort_keys=True, separators=(",", ":"))
         epoch_payload = dict(terra_payload)
         epoch_payload.pop("scenario_id", None)
+        epoch_payload.pop("decision_at", None)
+        # Provenance is persisted and sent to Terra, but source labels do not make
+        # otherwise identical normalized evidence a new decision epoch.
+        epoch_payload.pop("provenance", None)
         epoch_json = json.dumps(epoch_payload, sort_keys=True, separators=(",", ":"))
         evidence_snapshot_hash = hashlib.sha256(epoch_json.encode("utf-8")).hexdigest()
-        prompt_hash = hashlib.sha256(TERRA_REPLAY_INSTRUCTIONS.encode("utf-8")).hexdigest()
+        prompt_hash = hashlib.sha256(instructions.encode("utf-8")).hexdigest()
         model = str(
             getattr(
                 self.analysis_provider,
@@ -1116,7 +1197,7 @@ class ReplayDecisionPipeline:
         decision_key = "|".join(
             (
                 evidence_snapshot_hash,
-                TERRA_REPLAY_PROMPT_VERSION,
+                prompt_version,
                 prompt_hash,
                 model,
             )
@@ -1125,7 +1206,7 @@ class ReplayDecisionPipeline:
         claimed = self.journal.claim_ai_decision(
             decision_id=decision_id,
             evidence_snapshot_hash=evidence_snapshot_hash,
-            prompt_version=TERRA_REPLAY_PROMPT_VERSION,
+            prompt_version=prompt_version,
             prompt_hash=prompt_hash,
             model=model,
         )
@@ -1133,7 +1214,7 @@ class ReplayDecisionPipeline:
             started = time.perf_counter_ns()
             try:
                 analysis = self.analysis_provider.analyze(
-                    instructions=TERRA_REPLAY_INSTRUCTIONS,
+                    instructions=instructions,
                     evidence_json=evidence_json,
                 )
             except Exception as exc:
@@ -1175,7 +1256,7 @@ class ReplayDecisionPipeline:
         else:
             stored = self.journal.get_ai_decision(
                 evidence_snapshot_hash=evidence_snapshot_hash,
-                prompt_version=TERRA_REPLAY_PROMPT_VERSION,
+                prompt_version=prompt_version,
                 prompt_hash=prompt_hash,
                 model=model,
             )
@@ -1197,7 +1278,7 @@ class ReplayDecisionPipeline:
             "decision_id": decision_id,
             "evidence_snapshot_id": decision_id,
             "evidence_snapshot_hash": evidence_snapshot_hash,
-            "prompt_version": TERRA_REPLAY_PROMPT_VERSION,
+            "prompt_version": prompt_version,
             "prompt_hash": prompt_hash,
             "model": model,
             "timestamp": snapshot.decision_at.isoformat(),

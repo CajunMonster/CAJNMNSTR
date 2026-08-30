@@ -122,7 +122,7 @@ def test_weak_invalid_and_stale_replays_fail_with_distinct_verdicts(tmp_path: Pa
 
     stale = results["stale-data-block"]
     assert stale.referee.verdict is RefereeVerdict.BLOCK
-    assert stale.referee.reason_code == "STALE_REPLAY_EVIDENCE"
+    assert stale.referee.reason_code == "STALE_EVIDENCE"
     assert stale.selection.candidate is None
 
 

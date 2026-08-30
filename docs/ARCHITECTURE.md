@@ -46,6 +46,31 @@ gate can report `READY_FOR_OPERATOR_REVIEW`, but always records
 `broker_submission_allowed=false`; the replay pipeline has no coordinator dependency. See
 [REPLAY_DECISION_CYCLE.md](REPLAY_DECISION_CYCLE.md) for exact gates and measured results.
 
+## Authenticated live Evidence Snapshot path
+
+The live collector reads the dedicated PAPER account, positions, open orders, market clock, SPY
+SIP quote, completed regular-session five-minute SIP bars, daily bars for previous close, and the
+7–21 DTE SPY OPRA chain. It passes a replay-shaped document through the same
+`EvidenceCalculator`, so Terra, the Referee, option selector, Passport, and operator-review gate
+receive one normalized contract. Only the source mode and provenance differ.
+
+The collector first reconciles durable order identities with Alpaca and requires the account to
+be active, flat, and free of open orders. Any mismatch is a hard snapshot failure. Closed market,
+SIP quote age over 30 seconds, OPRA quote age over 30 seconds, insufficient completed bars, or
+invalid evidence makes the snapshot non-actionable. The command has no execution-coordinator
+dependency and always records `broker_submission_allowed=false`.
+
+From the project root, Monday's single read-only operator path is:
+
+```powershell
+.venv\Scripts\cajnmnstr.exe live-decision --dashboard-path public\dashboard-state.json
+```
+
+Run it only after enough regular-session five-minute bars exist. A safe result requires PAPER,
+fresh SIP/OPRA, successful reconciliation, a sealed Passport, and
+`READY_FOR_OPERATOR_REVIEW`; even then entry authority remains disabled and the command stops
+before broker submission.
+
 ## Terra proposal boundary
 
 The initial AI baseline uses the OpenAI Responses API with `gpt-5.6-terra`, no tools, no response storage, and a strict JSON schema. Terra returns only `LONG_CALL`, `LONG_PUT`, or `NO_TRADE`, plus an `INTRADAY` time horizon, thesis, counterargument, uncertainty, cited Evidence IDs, and structured invalidation. `NO_TRADE` maps to `ABSTAIN`. Timeouts, refusals, incomplete responses, unexpected tool calls, unknown citations, malformed JSON, and schema failures also map to `ABSTAIN`. The adapter has no broker, MCP, sizing, Referee, or execution method.

@@ -19,6 +19,7 @@ from .decision_cycle import (
 )
 from .health import HealthSupervisor, freshness_health
 from .journal import Journal
+from .live_snapshot import LiveDecisionRunner, outcome_summary
 from .models import EventType, HealthState
 from .option_chain import parse_option_chain_payload
 
@@ -170,6 +171,28 @@ def _replay_cycle(settings: Settings, path: Path, *, live_terra: bool) -> int:
         )
     )
     return 0 if status == "PASS" else 4
+
+
+def _live_decision(
+    settings: Settings,
+    dashboard_path: Path,
+    health_path: Path,
+) -> int:
+    """Run authenticated reads and Terra, with no broker-submission dependency."""
+    settings.require_credentials()
+    if not settings.ai_configured:
+        raise ValueError("Terra must be configured for the live decision cycle")
+    if settings.entry_enabled or settings.entry_armed:
+        raise ValueError("Live decision review requires new-entry authority disabled")
+
+    outcome = LiveDecisionRunner(
+        settings,
+        Journal(settings.journal_path),
+        AlpacaAdapter(settings),
+        OpenAIResponsesAdapter(settings),
+    ).run(dashboard_path=dashboard_path, health_path=health_path)
+    print(_json(outcome_summary(outcome)))
+    return 0 if outcome.health.state is HealthState.HEALTHY else 2
 
 
 def _mcp_config_check(path: Path) -> int:
@@ -614,6 +637,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Invoke Terra with replay-only evidence; never contacts Alpaca",
     )
 
+    live_decision = subparsers.add_parser(
+        "live-decision",
+        help=(
+            "Read authenticated SIP/OPRA evidence, run Terra and Referee, "
+            "then stop before broker submission"
+        ),
+    )
+    live_decision.add_argument(
+        "--dashboard-path",
+        type=Path,
+        default=Path("public/dashboard-state.json"),
+    )
+    live_decision.add_argument(
+        "--health-path",
+        type=Path,
+        default=Path("public/health.json"),
+    )
+
     mcp = subparsers.add_parser("mcp-config-check", help="Validate the read-only MCP example")
     mcp.add_argument(
         "--path", type=Path, default=Path("config/codex-mcp.example.toml")
@@ -640,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
         return _verify_terra(settings, args.path)
     if args.command == "replay-cycle":
         return _replay_cycle(settings, args.path, live_terra=args.live_terra)
+    if args.command == "live-decision":
+        return _live_decision(settings, args.dashboard_path, args.health_path)
     if args.command == "mcp-config-check":
         return _mcp_config_check(args.path)
     if args.command == "verify-alpaca":

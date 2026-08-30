@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 
@@ -13,6 +13,7 @@ from .models import (
     OptionContractSnapshot,
     OrderIntent,
     PositionSnapshot,
+    StockBarSnapshot,
 )
 
 
@@ -55,6 +56,23 @@ class MarketDataReader(Protocol):
     ) -> list[OptionChainSnapshot]: ...
 
     def get_option_snapshot(self, symbol: str, *, feed: str) -> OptionChainSnapshot: ...
+
+    def get_spy_bars(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        timeframe_minutes: int,
+        feed: str | None = None,
+    ) -> list[StockBarSnapshot]: ...
+
+    def get_spy_daily_bars(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        feed: str | None = None,
+    ) -> list[StockBarSnapshot]: ...
 
 
 class PaperExecutor(Protocol):

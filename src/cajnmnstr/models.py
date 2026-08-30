@@ -74,6 +74,20 @@ class MarketQuote:
 
 
 @dataclass(frozen=True, slots=True)
+class StockBarSnapshot:
+    symbol: str
+    timestamp: datetime
+    timeframe_minutes: int | None
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    vwap: Decimal | None
+    feed: str
+
+
+@dataclass(frozen=True, slots=True)
 class OptionContractSnapshot:
     contract_id: str
     symbol: str
