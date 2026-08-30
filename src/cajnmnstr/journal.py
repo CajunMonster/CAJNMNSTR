@@ -157,6 +157,23 @@ class Journal:
             ).fetchone()
         return None if row is None else str(row["state"])
 
+    def get_passport(self, passport_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT passport_id, created_at, state, payload_json, sealed_at
+                FROM evidence_passports WHERE passport_id = ?""",
+                (passport_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "passport_id": str(row["passport_id"]),
+            "created_at": str(row["created_at"]),
+            "state": str(row["state"]),
+            "payload": json.loads(str(row["payload_json"])),
+            "sealed_at": None if row["sealed_at"] is None else str(row["sealed_at"]),
+        }
+
     def record_referee_result(
         self,
         *,

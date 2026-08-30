@@ -4,7 +4,12 @@
   "state": "PAUSED",
   "execution": "disabled",
   "alpaca": "paper_authenticated_read_only",
-  "ai_provider": "terra_fixture_verified",
-  "market_data": "representative",
+  "ai_provider": "terra_nine_case_replay_verified",
+  "replay_pipeline": "sealed_passport_operator_review_stop_before_broker",
+  "replay_distribution": "approve_5_reduce_0_abstain_2_block_2_live_terra",
+  "data_entitlement": "algo_trader_plus_verified",
+  "equity_feed": "sip_authorized",
+  "options_feed": "opra_authorized_closed_market_stale",
+  "market_data": "representative_closed_market",
   "protective_action": "block_proposals_and_orders"
 }

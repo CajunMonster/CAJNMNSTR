@@ -1,0 +1,317 @@
+{
+  "fixture_id": "spy-pre-monday-2026-08-24",
+  "fixture_version": "1.0",
+  "replay": true,
+  "execution_allowed": false,
+  "market_sets": {
+    "bullish": {
+      "symbol": "SPY",
+      "previous_close": 499.00,
+      "expected_volume_at_time": 15000,
+      "events": [],
+      "news": [],
+      "bars": [
+        {"t": "2026-08-24T13:30:00Z", "o": 500.00, "h": 500.20, "l": 499.90, "c": 500.10, "v": 1200},
+        {"t": "2026-08-24T13:35:00Z", "o": 500.10, "h": 500.40, "l": 500.00, "c": 500.30, "v": 1100},
+        {"t": "2026-08-24T13:40:00Z", "o": 500.30, "h": 500.60, "l": 500.20, "c": 500.50, "v": 1050},
+        {"t": "2026-08-24T13:45:00Z", "o": 500.50, "h": 500.80, "l": 500.40, "c": 500.70, "v": 1000},
+        {"t": "2026-08-24T13:50:00Z", "o": 500.70, "h": 501.00, "l": 500.60, "c": 500.90, "v": 1000},
+        {"t": "2026-08-24T13:55:00Z", "o": 500.90, "h": 501.20, "l": 500.80, "c": 501.10, "v": 1000},
+        {"t": "2026-08-24T14:00:00Z", "o": 501.10, "h": 501.70, "l": 501.00, "c": 501.60, "v": 1150},
+        {"t": "2026-08-24T14:05:00Z", "o": 501.60, "h": 502.10, "l": 501.50, "c": 502.00, "v": 1200},
+        {"t": "2026-08-24T14:10:00Z", "o": 502.00, "h": 502.50, "l": 501.90, "c": 502.40, "v": 1250},
+        {"t": "2026-08-24T14:15:00Z", "o": 502.40, "h": 502.90, "l": 502.30, "c": 502.80, "v": 1300},
+        {"t": "2026-08-24T14:20:00Z", "o": 502.80, "h": 503.30, "l": 502.70, "c": 503.20, "v": 1350},
+        {"t": "2026-08-24T14:25:00Z", "o": 503.20, "h": 503.70, "l": 503.10, "c": 503.60, "v": 1400},
+        {"t": "2026-08-24T14:30:00Z", "o": 503.60, "h": 504.10, "l": 503.50, "c": 504.00, "v": 1500}
+      ]
+    },
+    "bearish": {
+      "symbol": "SPY",
+      "previous_close": 501.00,
+      "expected_volume_at_time": 15000,
+      "events": [],
+      "news": [],
+      "bars": [
+        {"t": "2026-08-24T13:30:00Z", "o": 500.00, "h": 500.10, "l": 499.80, "c": 499.90, "v": 1200},
+        {"t": "2026-08-24T13:35:00Z", "o": 499.90, "h": 500.00, "l": 499.60, "c": 499.70, "v": 1100},
+        {"t": "2026-08-24T13:40:00Z", "o": 499.70, "h": 499.80, "l": 499.40, "c": 499.50, "v": 1050},
+        {"t": "2026-08-24T13:45:00Z", "o": 499.50, "h": 499.60, "l": 499.20, "c": 499.30, "v": 1000},
+        {"t": "2026-08-24T13:50:00Z", "o": 499.30, "h": 499.40, "l": 499.00, "c": 499.10, "v": 1000},
+        {"t": "2026-08-24T13:55:00Z", "o": 499.10, "h": 499.20, "l": 498.80, "c": 498.90, "v": 1000},
+        {"t": "2026-08-24T14:00:00Z", "o": 498.90, "h": 499.00, "l": 498.30, "c": 498.40, "v": 1150},
+        {"t": "2026-08-24T14:05:00Z", "o": 498.40, "h": 498.50, "l": 497.90, "c": 498.00, "v": 1200},
+        {"t": "2026-08-24T14:10:00Z", "o": 498.00, "h": 498.10, "l": 497.50, "c": 497.60, "v": 1250},
+        {"t": "2026-08-24T14:15:00Z", "o": 497.60, "h": 497.70, "l": 497.10, "c": 497.20, "v": 1300},
+        {"t": "2026-08-24T14:20:00Z", "o": 497.20, "h": 497.30, "l": 496.70, "c": 496.80, "v": 1350},
+        {"t": "2026-08-24T14:25:00Z", "o": 496.80, "h": 496.90, "l": 496.30, "c": 496.40, "v": 1400},
+        {"t": "2026-08-24T14:30:00Z", "o": 496.40, "h": 496.50, "l": 495.90, "c": 496.00, "v": 1500}
+      ]
+    },
+    "weak": {
+      "symbol": "SPY",
+      "previous_close": 500.00,
+      "expected_volume_at_time": 15000,
+      "events": [],
+      "news": [],
+      "bars": [
+        {"t": "2026-08-24T13:30:00Z", "o": 500.00, "h": 500.15, "l": 499.85, "c": 500.00, "v": 1100},
+        {"t": "2026-08-24T13:35:00Z", "o": 500.00, "h": 500.20, "l": 499.90, "c": 500.10, "v": 1050},
+        {"t": "2026-08-24T13:40:00Z", "o": 500.10, "h": 500.15, "l": 499.80, "c": 499.90, "v": 1000},
+        {"t": "2026-08-24T13:45:00Z", "o": 499.90, "h": 500.15, "l": 499.85, "c": 500.00, "v": 1000},
+        {"t": "2026-08-24T13:50:00Z", "o": 500.00, "h": 500.20, "l": 499.90, "c": 500.10, "v": 1000},
+        {"t": "2026-08-24T13:55:00Z", "o": 500.10, "h": 500.15, "l": 499.85, "c": 499.95, "v": 1000},
+        {"t": "2026-08-24T14:00:00Z", "o": 499.95, "h": 500.15, "l": 499.90, "c": 500.05, "v": 1050},
+        {"t": "2026-08-24T14:05:00Z", "o": 500.05, "h": 500.10, "l": 499.85, "c": 499.95, "v": 1050},
+        {"t": "2026-08-24T14:10:00Z", "o": 499.95, "h": 500.10, "l": 499.90, "c": 500.00, "v": 1050},
+        {"t": "2026-08-24T14:15:00Z", "o": 500.00, "h": 500.15, "l": 499.95, "c": 500.05, "v": 1050},
+        {"t": "2026-08-24T14:20:00Z", "o": 500.05, "h": 500.10, "l": 499.85, "c": 499.95, "v": 1050},
+        {"t": "2026-08-24T14:25:00Z", "o": 499.95, "h": 500.12, "l": 499.90, "c": 500.02, "v": 1050},
+        {"t": "2026-08-24T14:30:00Z", "o": 500.02, "h": 500.10, "l": 499.90, "c": 500.00, "v": 1050}
+      ]
+    },
+    "reduce": {
+      "symbol": "SPY",
+      "previous_close": 499.50,
+      "expected_volume_at_time": 15000,
+      "events": [],
+      "news": [],
+      "bars": [
+        {"t": "2026-08-24T13:30:00Z", "o": 500.00, "h": 500.15, "l": 499.90, "c": 500.00, "v": 1100},
+        {"t": "2026-08-24T13:35:00Z", "o": 500.00, "h": 500.30, "l": 499.95, "c": 500.20, "v": 1050},
+        {"t": "2026-08-24T13:40:00Z", "o": 500.20, "h": 500.50, "l": 500.10, "c": 500.40, "v": 1050},
+        {"t": "2026-08-24T13:45:00Z", "o": 500.40, "h": 500.70, "l": 500.30, "c": 500.60, "v": 1050},
+        {"t": "2026-08-24T13:50:00Z", "o": 500.60, "h": 500.90, "l": 500.50, "c": 500.80, "v": 1050},
+        {"t": "2026-08-24T13:55:00Z", "o": 500.80, "h": 501.10, "l": 500.70, "c": 501.00, "v": 1050},
+        {"t": "2026-08-24T14:00:00Z", "o": 501.00, "h": 501.70, "l": 500.90, "c": 501.60, "v": 1150},
+        {"t": "2026-08-24T14:05:00Z", "o": 501.60, "h": 502.30, "l": 501.50, "c": 502.20, "v": 1200},
+        {"t": "2026-08-24T14:10:00Z", "o": 502.20, "h": 503.10, "l": 502.10, "c": 503.00, "v": 1250},
+        {"t": "2026-08-24T14:15:00Z", "o": 503.00, "h": 504.10, "l": 502.90, "c": 504.00, "v": 1300},
+        {"t": "2026-08-24T14:20:00Z", "o": 504.00, "h": 504.05, "l": 503.70, "c": 503.80, "v": 1200},
+        {"t": "2026-08-24T14:25:00Z", "o": 503.80, "h": 503.85, "l": 503.50, "c": 503.60, "v": 1150},
+        {"t": "2026-08-24T14:30:00Z", "o": 503.60, "h": 503.70, "l": 503.40, "c": 503.50, "v": 1100}
+      ]
+    },
+    "invalid": {
+      "symbol": "SPY",
+      "previous_close": null,
+      "expected_volume_at_time": 15000,
+      "events": [],
+      "news": [],
+      "bars": [
+        {"t": "2026-08-24T13:30:00Z", "o": 500.00, "h": 500.20, "l": 499.90, "c": 500.10, "v": 1200},
+        {"t": "2026-08-24T13:35:00Z", "o": 500.10, "h": 500.40, "l": 500.00, "c": 500.30, "v": 1100},
+        {"t": "2026-08-24T13:40:00Z", "o": 500.30, "h": 500.60, "l": 500.20, "c": 500.50, "v": 1050},
+        {"t": "2026-08-24T13:45:00Z", "o": 500.50, "h": 500.80, "l": 500.40, "c": 500.70, "v": 1000},
+        {"t": "2026-08-24T13:50:00Z", "o": 500.70, "h": 501.00, "l": 500.60, "c": 500.90, "v": 1000},
+        {"t": "2026-08-24T13:55:00Z", "o": 500.90, "h": 501.20, "l": 500.80, "c": 501.10, "v": 1000},
+        {"t": "2026-08-24T14:00:00Z", "o": 501.10, "h": 501.70, "l": 501.00, "c": 501.60, "v": 1150},
+        {"t": "2026-08-24T14:05:00Z", "o": 501.60, "h": 502.10, "l": 501.50, "c": 502.00, "v": 1200},
+        {"t": "2026-08-24T14:10:00Z", "o": 502.00, "h": 502.50, "l": 501.90, "c": 502.40, "v": 1250},
+        {"t": "2026-08-24T14:15:00Z", "o": 502.40, "h": 502.90, "l": 502.30, "c": 502.80, "v": 1300},
+        {"t": "2026-08-24T14:20:00Z", "o": 502.80, "h": 503.30, "l": 502.70, "c": 503.20, "v": 1350},
+        {"t": "2026-08-24T14:25:00Z", "o": 503.20, "h": 503.70, "l": 503.10, "c": 503.60, "v": 1400},
+        {"t": "2026-08-24T14:30:00Z", "o": 503.60, "h": 504.10, "l": 503.50, "c": 504.00, "v": 1500}
+      ]
+    }
+  },
+  "option_sets": {
+    "valid": {
+      "snapshots": {
+        "SPY260904C00504000": {
+          "latestQuote": {"bp": 3.95, "ap": 4.05, "bs": 120, "as": 110, "t": "2026-08-24T14:29:55Z"},
+          "latestTrade": {"p": 4.00, "t": "2026-08-24T14:29:50Z"},
+          "impliedVolatility": 0.205,
+          "greeks": {"delta": 0.49, "gamma": 0.031, "theta": -0.18, "vega": 0.24, "rho": 0.06}
+        },
+        "SPY260904P00496000": {
+          "latestQuote": {"bp": 3.90, "ap": 4.00, "bs": 115, "as": 105, "t": "2026-08-24T14:29:55Z"},
+          "latestTrade": {"p": 3.95, "t": "2026-08-24T14:29:50Z"},
+          "impliedVolatility": 0.215,
+          "greeks": {"delta": -0.49, "gamma": 0.032, "theta": -0.17, "vega": 0.23, "rho": -0.05}
+        },
+        "SPY260904C00500000": {
+          "latestQuote": {"bp": 3.60, "ap": 3.70, "bs": 100, "as": 100, "t": "2026-08-24T14:29:55Z"},
+          "latestTrade": {"p": 3.65, "t": "2026-08-24T14:29:50Z"},
+          "impliedVolatility": 0.202,
+          "greeks": {"delta": 0.42, "gamma": 0.029, "theta": -0.16, "vega": 0.22, "rho": 0.05}
+        },
+        "SPY260904P00500000": {
+          "latestQuote": {"bp": 3.65, "ap": 3.75, "bs": 100, "as": 100, "t": "2026-08-24T14:29:55Z"},
+          "latestTrade": {"p": 3.70, "t": "2026-08-24T14:29:50Z"},
+          "impliedVolatility": 0.212,
+          "greeks": {"delta": -0.42, "gamma": 0.030, "theta": -0.17, "vega": 0.22, "rho": -0.05}
+        }
+      }
+    },
+    "missing_greeks": {
+      "snapshots": {
+        "SPY260904C00504000": {
+          "latestQuote": {"bp": 3.95, "ap": 4.05, "bs": 120, "as": 110, "t": "2026-08-24T14:29:55Z"},
+          "impliedVolatility": 0.205,
+          "greeks": {"delta": 0.49, "gamma": 0.031, "theta": -0.18, "vega": 0.24, "rho": null}
+        }
+      }
+    },
+    "wide_spread": {
+      "snapshots": {
+        "SPY260904C00504000": {
+          "latestQuote": {"bp": 3.20, "ap": 4.05, "bs": 20, "as": 15, "t": "2026-08-24T14:29:55Z"},
+          "impliedVolatility": 0.205,
+          "greeks": {"delta": 0.49, "gamma": 0.031, "theta": -0.18, "vega": 0.24, "rho": 0.06}
+        }
+      }
+    },
+    "no_suitable": {
+      "snapshots": {
+        "SPY260904C00504000": {
+          "latestQuote": {"bp": 3.95, "ap": 4.05, "bs": 120, "as": 110, "t": "2026-08-24T14:29:55Z"},
+          "impliedVolatility": 0.205,
+          "greeks": {"delta": 0.70, "gamma": 0.031, "theta": -0.18, "vega": 0.24, "rho": 0.06}
+        },
+        "SPY261023C00504000": {
+          "latestQuote": {"bp": 3.95, "ap": 4.05, "bs": 120, "as": 110, "t": "2026-08-24T14:29:55Z"},
+          "impliedVolatility": 0.205,
+          "greeks": {"delta": 0.49, "gamma": 0.031, "theta": -0.18, "vega": 0.24, "rho": 0.06}
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "bullish-approve",
+      "market_set": "bullish",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_CALL",
+        "time_horizon": "INTRADAY",
+        "thesis": "Positive returns align with price above VWAP and the opening range.",
+        "counterargument": "A sharp reversal back through VWAP would negate the directional alignment.",
+        "uncertainty": "LOW",
+        "evidence_ids": ["feature:return_15m", "feature:return_60m", "feature:vwap_relationship", "feature:opening_range_state"],
+        "invalidation": {"condition": "Price loses VWAP and the opening range.", "evidence_ids": ["feature:vwap_relationship", "feature:opening_range_state"]}
+      }
+    },
+    {
+      "scenario_id": "bearish-approve",
+      "market_set": "bearish",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_PUT",
+        "time_horizon": "INTRADAY",
+        "thesis": "Negative returns align with price below VWAP and the opening range.",
+        "counterargument": "A reclaim of VWAP could turn the decline into a failed breakdown.",
+        "uncertainty": "LOW",
+        "evidence_ids": ["feature:return_15m", "feature:return_60m", "feature:vwap_relationship", "feature:opening_range_state"],
+        "invalidation": {"condition": "Price reclaims VWAP and the opening range.", "evidence_ids": ["feature:vwap_relationship", "feature:opening_range_state"]}
+      }
+    },
+    {
+      "scenario_id": "weak-abstain",
+      "market_set": "weak",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "NO_TRADE",
+        "time_horizon": "INTRADAY",
+        "thesis": "The replay lacks a durable directional alignment.",
+        "counterargument": "A later break from the opening range could create direction, but it is absent now.",
+        "uncertainty": "HIGH",
+        "evidence_ids": ["feature:return_5m", "feature:return_15m", "feature:opening_range_state"],
+        "invalidation": {"condition": "Directional returns align with an opening-range break.", "evidence_ids": ["feature:return_15m", "feature:opening_range_state"]}
+      }
+    },
+    {
+      "scenario_id": "hard-invalid-block",
+      "market_set": "invalid",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "NO_TRADE",
+        "time_horizon": "INTRADAY",
+        "thesis": "A required previous-close input is invalid.",
+        "counterargument": "Other features are directional, but they cannot repair a hard input failure.",
+        "uncertainty": "HIGH",
+        "evidence_ids": ["data:hard_failures", "data:freshness"],
+        "invalidation": {"condition": "The invalid required input is replaced by validated replay provenance.", "evidence_ids": ["data:hard_failures"]}
+      }
+    },
+    {
+      "scenario_id": "bullish-reduce",
+      "market_set": "reduce",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_CALL",
+        "time_horizon": "INTRADAY",
+        "thesis": "The broader move remains above VWAP and the opening range despite a pullback.",
+        "counterargument": "Negative five- and fifteen-minute returns show immediate momentum conflict.",
+        "uncertainty": "MEDIUM",
+        "evidence_ids": ["feature:return_60m", "feature:vwap_relationship", "feature:opening_range_state", "feature:return_15m"],
+        "invalidation": {"condition": "The pullback loses VWAP or the opening range.", "evidence_ids": ["feature:vwap_relationship", "feature:opening_range_state"]}
+      }
+    },
+    {
+      "scenario_id": "missing-greeks",
+      "market_set": "bullish",
+      "option_set": "missing_greeks",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_CALL",
+        "time_horizon": "INTRADAY",
+        "thesis": "The underlying evidence is directionally bullish.",
+        "counterargument": "Contract authority depends on a complete validated option record.",
+        "uncertainty": "LOW",
+        "evidence_ids": ["feature:return_15m", "feature:return_60m", "feature:vwap_relationship"],
+        "invalidation": {"condition": "Underlying price loses VWAP.", "evidence_ids": ["feature:vwap_relationship"]}
+      }
+    },
+    {
+      "scenario_id": "wide-spread",
+      "market_set": "bullish",
+      "option_set": "wide_spread",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_CALL",
+        "time_horizon": "INTRADAY",
+        "thesis": "The underlying evidence is directionally bullish.",
+        "counterargument": "A wide option spread can make a sound thesis non-actionable.",
+        "uncertainty": "LOW",
+        "evidence_ids": ["feature:return_15m", "feature:return_60m", "feature:vwap_relationship"],
+        "invalidation": {"condition": "Underlying price loses VWAP.", "evidence_ids": ["feature:vwap_relationship"]}
+      }
+    },
+    {
+      "scenario_id": "stale-data-block",
+      "market_set": "bullish",
+      "option_set": "valid",
+      "decision_at": "2026-08-24T14:40:00Z",
+      "fixture_proposal": {
+        "direction": "NO_TRADE",
+        "time_horizon": "INTRADAY",
+        "thesis": "Replay market and option observations exceed the permitted age.",
+        "counterargument": "The historical direction is clear, but stale data has no actionable authority.",
+        "uncertainty": "HIGH",
+        "evidence_ids": ["data:freshness", "feature:return_60m"],
+        "invalidation": {"condition": "Fresh validated market and option observations replace the stale inputs.", "evidence_ids": ["data:freshness"]}
+      }
+    },
+    {
+      "scenario_id": "no-suitable-contract",
+      "market_set": "bullish",
+      "option_set": "no_suitable",
+      "decision_at": "2026-08-24T14:30:00Z",
+      "fixture_proposal": {
+        "direction": "LONG_CALL",
+        "time_horizon": "INTRADAY",
+        "thesis": "The underlying evidence is directionally bullish.",
+        "counterargument": "A directional thesis cannot override contract eligibility constraints.",
+        "uncertainty": "LOW",
+        "evidence_ids": ["feature:return_15m", "feature:return_60m", "feature:vwap_relationship"],
+        "invalidation": {"condition": "Underlying price loses VWAP.", "evidence_ids": ["feature:vwap_relationship"]}
+      }
+    }
+  ]
+}

@@ -29,11 +29,15 @@ def settings(tmp_path: Path) -> Settings:
 def valid_payload(direction: str = "LONG_CALL") -> dict[str, object]:
     return {
         "direction": direction,
+        "time_horizon": "INTRADAY",
         "thesis": "Fixture evidence supports the stated direction.",
         "counterargument": "The fixture is stale and cannot support live authority.",
         "uncertainty": "HIGH",
         "evidence_ids": ["replay:price-001", "replay:risk-001"],
-        "invalidation": "Any live decision requires fresh authenticated evidence.",
+        "invalidation": {
+            "condition": "Any live decision requires fresh authenticated evidence.",
+            "evidence_ids": ["replay:risk-001"],
+        },
     }
 
 

@@ -12,6 +12,11 @@ from typing import Any
 from .ai import TERRA_FIXTURE_INSTRUCTIONS, OpenAIResponsesAdapter
 from .alpaca_adapter import AlpacaAdapter
 from .config import Settings
+from .decision_cycle import (
+    FixtureAnalysisProvider,
+    ReplayDecisionPipeline,
+    results_summary,
+)
 from .health import HealthSupervisor, freshness_health
 from .journal import Journal
 from .models import EventType, HealthState
@@ -111,6 +116,54 @@ def _verify_terra(settings: Settings, path: Path) -> int:
     )
     print(_json(event_payload))
     return 0 if passed else 4
+
+
+def _replay_cycle(settings: Settings, path: Path, *, live_terra: bool) -> int:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("Decision-cycle fixture must be a JSON object")
+    if live_terra:
+        provider = OpenAIResponsesAdapter(settings)
+        analysis_mode = "LIVE_TERRA_REPLAY_ONLY"
+    else:
+        scenarios = document.get("scenarios", [])
+        if not isinstance(scenarios, list):
+            raise ValueError("Decision-cycle scenarios must be a list")
+        proposals = {
+            str(item["scenario_id"]): item["fixture_proposal"]
+            for item in scenarios
+        }
+        provider = FixtureAnalysisProvider(proposals)
+        analysis_mode = "CHECKED_IN_TERRA_SHAPED_FIXTURES"
+
+    results = ReplayDecisionPipeline(
+        settings,
+        Journal(settings.journal_path),
+        provider,
+    ).run_document(document)
+    summary = results_summary(results)
+    ai_failures = sum(item.ai_failure_code is not None for item in results)
+    safe_stop = (
+        summary["broker_submission_count"] == 0
+        and not settings.execution_enabled
+        and not settings.execution_armed
+        and all(not item.operator_review.broker_submission_allowed for item in results)
+    )
+    status = "PASS" if safe_stop and ai_failures == 0 else "FAIL_CLOSED"
+    print(
+        _json(
+            {
+                "status": status,
+                "analysis_mode": analysis_mode,
+                "fixture_id": document.get("fixture_id"),
+                "execution_enabled": settings.execution_enabled,
+                "execution_armed": settings.execution_armed,
+                "ai_failure_count": ai_failures,
+                **summary,
+            }
+        )
+    )
+    return 0 if status == "PASS" else 4
 
 
 def _mcp_config_check(path: Path) -> int:
@@ -533,6 +586,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--path", type=Path, default=Path("fixtures/ai/spy-weekend-replay.json")
     )
 
+    replay = subparsers.add_parser(
+        "replay-cycle",
+        help="Run the SPY decision cycle and stop before broker submission",
+    )
+    replay.add_argument(
+        "--path",
+        type=Path,
+        default=Path("fixtures/replay/spy-decision-cycle.json"),
+    )
+    replay.add_argument(
+        "--live-terra",
+        action="store_true",
+        help="Invoke Terra with replay-only evidence; never contacts Alpaca",
+    )
+
     mcp = subparsers.add_parser("mcp-config-check", help="Validate the read-only MCP example")
     mcp.add_argument(
         "--path", type=Path, default=Path("config/codex-mcp.example.toml")
@@ -557,6 +625,8 @@ def main(argv: list[str] | None = None) -> int:
         return _fixture_check(args.path, args.feed)
     if args.command == "verify-terra":
         return _verify_terra(settings, args.path)
+    if args.command == "replay-cycle":
+        return _replay_cycle(settings, args.path, live_terra=args.live_terra)
     if args.command == "mcp-config-check":
         return _mcp_config_check(args.path)
     if args.command == "verify-alpaca":

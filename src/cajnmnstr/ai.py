@@ -22,14 +22,25 @@ class ProposalUncertainty(StrEnum):
     HIGH = "HIGH"
 
 
+class ProposalHorizon(StrEnum):
+    INTRADAY = "INTRADAY"
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalInvalidation:
+    condition: str
+    evidence_ids: tuple[str, ...]
+
+
 @dataclass(frozen=True, slots=True)
 class StructuredProposal:
     direction: ProposalDirection
+    time_horizon: ProposalHorizon
     thesis: str
     counterargument: str
     uncertainty: ProposalUncertainty
     evidence_ids: tuple[str, ...]
-    invalidation: str
+    invalidation: ProposalInvalidation
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +61,7 @@ PROPOSAL_JSON_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
     "required": [
         "direction",
+        "time_horizon",
         "thesis",
         "counterargument",
         "uncertainty",
@@ -61,6 +73,10 @@ PROPOSAL_JSON_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": [direction.value for direction in ProposalDirection],
         },
+        "time_horizon": {
+            "type": "string",
+            "enum": [horizon.value for horizon in ProposalHorizon],
+        },
         "thesis": {"type": "string"},
         "counterargument": {"type": "string"},
         "uncertainty": {
@@ -71,19 +87,52 @@ PROPOSAL_JSON_SCHEMA: dict[str, Any] = {
             "type": "array",
             "items": {"type": "string"},
         },
-        "invalidation": {"type": "string"},
+        "invalidation": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["condition", "evidence_ids"],
+            "properties": {
+                "condition": {"type": "string"},
+                "evidence_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+        },
     },
 }
 
 
 TERRA_FIXTURE_INSTRUCTIONS = """You are the CAJNMNSTR Terra analyst.
 Analyze only the supplied fixture or replay evidence. Never treat it as live or actionable.
-Choose exactly LONG_CALL, LONG_PUT, or NO_TRADE. Cite only supplied evidence IDs.
-Give the strongest counterargument, an uncertainty level, and a falsifiable invalidation.
+Choose exactly LONG_CALL, LONG_PUT, or NO_TRADE for the INTRADAY horizon.
+Cite only supplied evidence IDs. Give the strongest counterargument, an uncertainty level,
+and a falsifiable invalidation with supporting evidence IDs.
 You have no tools, broker access, execution authority, position sizing authority,
 or order authority.
 When evidence is stale, incomplete, conflicting, or insufficient, choose NO_TRADE.
 """
+
+
+def _validate_evidence_ids(value: Any, *, field_name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"Proposal {field_name} must be a non-empty list")
+    evidence_ids: list[str] = []
+    for evidence_id in value:
+        if not isinstance(evidence_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9._:-]{1,128}", evidence_id
+        ):
+            raise ValueError(f"Proposal {field_name} contains an invalid evidence ID")
+        evidence_ids.append(evidence_id)
+    if len(set(evidence_ids)) != len(evidence_ids):
+        raise ValueError(f"Proposal {field_name} must contain unique evidence IDs")
+    return tuple(evidence_ids)
+
+
+def _validate_text(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > 2000:
+        raise ValueError(f"Proposal field {field_name} must be non-empty text")
+    return value.strip()
 
 
 def validate_proposal(payload: Any) -> StructuredProposal:
@@ -95,41 +144,46 @@ def validate_proposal(payload: Any) -> StructuredProposal:
 
     try:
         direction = ProposalDirection(payload["direction"])
+        time_horizon = ProposalHorizon(payload["time_horizon"])
         uncertainty = ProposalUncertainty(payload["uncertainty"])
     except (TypeError, ValueError) as exc:
         raise ValueError("Proposal enum value is invalid") from exc
 
-    text_fields: dict[str, str] = {}
-    for name in ("thesis", "counterargument", "invalidation"):
-        value = payload[name]
-        if not isinstance(value, str) or not value.strip() or len(value) > 2000:
-            raise ValueError(f"Proposal field {name} must be non-empty text")
-        text_fields[name] = value.strip()
-
-    raw_evidence_ids = payload["evidence_ids"]
-    if not isinstance(raw_evidence_ids, list) or not raw_evidence_ids:
-        raise ValueError("Proposal evidence_ids must be a non-empty list")
-    evidence_ids: list[str] = []
-    for evidence_id in raw_evidence_ids:
-        if not isinstance(evidence_id, str) or not re.fullmatch(
-            r"[A-Za-z0-9._:-]{1,128}", evidence_id
-        ):
-            raise ValueError("Proposal evidence ID is invalid")
-        evidence_ids.append(evidence_id)
-    if len(set(evidence_ids)) != len(evidence_ids):
-        raise ValueError("Proposal evidence IDs must be unique")
+    text_fields = {
+        name: _validate_text(payload[name], field_name=name)
+        for name in ("thesis", "counterargument")
+    }
+    evidence_ids = _validate_evidence_ids(
+        payload["evidence_ids"], field_name="evidence_ids"
+    )
+    raw_invalidation = payload["invalidation"]
+    if not isinstance(raw_invalidation, dict) or set(raw_invalidation) != {
+        "condition",
+        "evidence_ids",
+    }:
+        raise ValueError("Proposal invalidation must match the required structure")
+    invalidation = ProposalInvalidation(
+        condition=_validate_text(
+            raw_invalidation["condition"], field_name="invalidation.condition"
+        ),
+        evidence_ids=_validate_evidence_ids(
+            raw_invalidation["evidence_ids"],
+            field_name="invalidation.evidence_ids",
+        ),
+    )
 
     return StructuredProposal(
         direction=direction,
+        time_horizon=time_horizon,
         thesis=text_fields["thesis"],
         counterargument=text_fields["counterargument"],
         uncertainty=uncertainty,
-        evidence_ids=tuple(evidence_ids),
-        invalidation=text_fields["invalidation"],
+        evidence_ids=evidence_ids,
+        invalidation=invalidation,
     )
 
 
-def _abstain(
+def fail_closed_analysis(
     *,
     model: str,
     failure_code: str,
@@ -143,11 +197,17 @@ def _abstain(
         resolved_model=model,
         proposal=StructuredProposal(
             direction=ProposalDirection.NO_TRADE,
+            time_horizon=ProposalHorizon.INTRADAY,
             thesis="No actionable proposal was accepted.",
             counterargument="The AI result failed a required provider or schema check.",
             uncertainty=ProposalUncertainty.HIGH,
             evidence_ids=("system:ai_failure",),
-            invalidation="Retry only with validated fixture evidence and a healthy Terra response.",
+            invalidation=ProposalInvalidation(
+                condition=(
+                    "Retry only with validated fixture evidence and a healthy Terra response."
+                ),
+                evidence_ids=("system:ai_failure",),
+            ),
         ),
         authority_disposition="ABSTAIN",
         failure_code=failure_code,
@@ -204,13 +264,13 @@ class OpenAIResponsesAdapter:
                 timeout=self._timeout,
             )
         except TimeoutError as exc:
-            return _abstain(
+            return fail_closed_analysis(
                 model=self._model,
                 failure_code="AI_TIMEOUT",
                 failure_detail=type(exc).__name__,
             )
         except Exception as exc:
-            return _abstain(
+            return fail_closed_analysis(
                 model=self._model,
                 failure_code="AI_PROVIDER_ERROR",
                 failure_detail=type(exc).__name__,
@@ -223,7 +283,7 @@ class OpenAIResponsesAdapter:
         raw_status = getattr(response, "status", "")
         status = str(getattr(raw_status, "value", raw_status))
         if status != "completed":
-            return _abstain(
+            return fail_closed_analysis(
                 model=self._model,
                 failure_code="AI_INCOMPLETE",
                 failure_detail=status or "missing_status",
@@ -235,7 +295,7 @@ class OpenAIResponsesAdapter:
             raw_item_type = getattr(item, "type", "")
             item_type = str(getattr(raw_item_type, "value", raw_item_type))
             if "tool" in item_type or item_type.endswith("_call"):
-                return _abstain(
+                return fail_closed_analysis(
                     model=self._model,
                     failure_code="UNEXPECTED_TOOL_CALL",
                     failure_detail=item_type,
@@ -244,7 +304,7 @@ class OpenAIResponsesAdapter:
                 )
             for content in getattr(item, "content", ()) or ():
                 if getattr(content, "type", None) == "refusal":
-                    return _abstain(
+                    return fail_closed_analysis(
                         model=self._model,
                         failure_code="MODEL_REFUSAL",
                         failure_detail="refusal",
@@ -255,7 +315,7 @@ class OpenAIResponsesAdapter:
         try:
             payload = json.loads(response.output_text)
         except (AttributeError, TypeError, json.JSONDecodeError) as exc:
-            return _abstain(
+            return fail_closed_analysis(
                 model=self._model,
                 failure_code="MALFORMED_OUTPUT",
                 failure_detail=type(exc).__name__,
@@ -266,7 +326,7 @@ class OpenAIResponsesAdapter:
         try:
             proposal = validate_proposal(payload)
         except ValueError as exc:
-            return _abstain(
+            return fail_closed_analysis(
                 model=self._model,
                 failure_code="SCHEMA_INVALID",
                 failure_detail=str(exc),

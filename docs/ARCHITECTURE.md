@@ -32,11 +32,25 @@ The operator authority path has independent safety conditions:
 
 The coordinator independently requires the durable authorization row, so a direct call from AI, MCP, or another bypass fails closed. The model-neutral AI port returns analysis only, and the MCP configuration exposes no trading toolset. The deterministic Referee, operator authority path, execution coordinator, and reconciliation remain separate layers.
 
+## Replay decision path
+
+The pre-Monday replay slice uses checked-in SPY five-minute bars, previous close, expected
+volume when provided, event/news context when present, and OPRA-shaped option snapshots. Numeric
+returns, VWAP, opening range, day-range location, relative volume, realized volatility, ATM IV,
+and valid same-strike skew are deterministic. Terra receives the resulting evidence, then the
+Referee distinguishes hard `BLOCK`, ordinary `ABSTAIN`, reduced authority, and full authority.
+Only `APPROVE` or `REDUCE` reaches deterministic contract selection.
+
+The complete Passport is sealed before the Referee result becomes durable. The replay operator
+gate can report `READY_FOR_OPERATOR_REVIEW`, but always records
+`broker_submission_allowed=false`; the replay pipeline has no coordinator dependency. See
+[REPLAY_DECISION_CYCLE.md](REPLAY_DECISION_CYCLE.md) for exact gates and measured results.
+
 ## Terra proposal boundary
 
-The initial AI baseline uses the OpenAI Responses API with `gpt-5.6-terra`, no tools, no response storage, and a strict JSON schema. Terra returns only `LONG_CALL`, `LONG_PUT`, or `NO_TRADE`, plus thesis, counterargument, uncertainty, cited Evidence IDs, and invalidation. `NO_TRADE` maps to `ABSTAIN`. Timeouts, refusals, incomplete responses, unexpected tool calls, malformed JSON, and schema failures also map to `ABSTAIN`. The adapter has no broker, MCP, sizing, Referee, or execution method.
+The initial AI baseline uses the OpenAI Responses API with `gpt-5.6-terra`, no tools, no response storage, and a strict JSON schema. Terra returns only `LONG_CALL`, `LONG_PUT`, or `NO_TRADE`, plus an `INTRADAY` time horizon, thesis, counterargument, uncertainty, cited Evidence IDs, and structured invalidation. `NO_TRADE` maps to `ABSTAIN`. Timeouts, refusals, incomplete responses, unexpected tool calls, unknown citations, malformed JSON, and schema failures also map to `ABSTAIN`. The adapter has no broker, MCP, sizing, Referee, or execution method.
 
-Weekend verification accepts only checked-in fixture/replay evidence explicitly marked non-actionable. Basic indicative options data remains informational and cannot relax the deterministic authority path.
+Weekend AI verification accepts only checked-in fixture/replay evidence explicitly marked non-actionable. Unverified or Basic indicative options data remains informational and cannot relax the deterministic authority path. SIP and OPRA configuration is accepted only with a locally recorded, authenticated Algo Trader Plus entitlement; feed authorization never overrides freshness or execution gates.
 
 ## Fail-loud health
 

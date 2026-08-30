@@ -128,6 +128,12 @@ class Settings:
             raise ConfigurationError("ALPACA_STOCK_FEED must be iex, sip, or delayed_sip")
         if self.options_feed not in {"indicative", "opra"}:
             raise ConfigurationError("ALPACA_OPTIONS_FEED must be indicative or opra")
+        if (
+            self.stock_feed == "sip" or self.options_feed == "opra"
+        ) and self.data_entitlement != "algo_trader_plus":
+            raise ConfigurationError(
+                "SIP or OPRA requires verified ALPACA_DATA_ENTITLEMENT=algo_trader_plus"
+            )
         if self.ai_provider != "openai":
             raise ConfigurationError("CAJNMNSTR_AI_PROVIDER must be openai for the Terra baseline")
         if self.openai_model != TERRA_MODEL:

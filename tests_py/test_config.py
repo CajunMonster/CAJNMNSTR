@@ -77,3 +77,31 @@ def test_legacy_generic_model_variable_is_ignored_and_never_reported(tmp_path: P
     )
     assert settings.openai_model == TERRA_MODEL
     assert legacy_value not in str(settings.redacted())
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("ALPACA_STOCK_FEED", "sip"),
+        ("ALPACA_OPTIONS_FEED", "opra"),
+    ],
+)
+def test_paid_feeds_require_verified_plus_entitlement(
+    tmp_path: Path, key: str, value: str
+) -> None:
+    with pytest.raises(ConfigurationError, match="requires verified"):
+        Settings.from_env(env(tmp_path, **{key: value}), load_local_file=False)
+
+
+def test_verified_plus_entitlement_accepts_sip_and_opra(tmp_path: Path) -> None:
+    settings = Settings.from_env(
+        env(
+            tmp_path,
+            ALPACA_STOCK_FEED="sip",
+            ALPACA_OPTIONS_FEED="opra",
+            ALPACA_DATA_ENTITLEMENT="algo_trader_plus",
+        ),
+        load_local_file=False,
+    )
+    assert settings.stock_feed == "sip"
+    assert settings.options_feed == "opra"

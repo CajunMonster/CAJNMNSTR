@@ -8,8 +8,8 @@ type ViewName = "dashboard" | "evidence" | "journal" | "system";
 const statusItems = [
   ["CAJNMNSTR", "PAUSED", "paused"],
   ["ALPACA", "PAPER AUTH", "ok"],
-  ["MARKET DATA", "STALE", "paused"],
-  ["AI", "TERRA VERIFIED", "ok"],
+  ["MARKET DATA", "SIP / OPRA STALE", "paused"],
+  ["AI", "TERRA REPLAY", "ok"],
   ["REFEREE", "LOCKED", "ok"],
 ];
 
@@ -24,12 +24,12 @@ const spyBars = [36, 44, 39, 54, 49, 63, 57, 51, 66, 61, 73, 69, 77, 70, 82, 76,
 const refereeChecks = [
   ["PAPER_MODE", "PASS", "Paper endpoint confirmed"],
   ["SYMBOL_ALLOWED", "PASS", "SPY is inside the approved universe"],
-  ["DATA_FRESHNESS", "BLOCK", "Authenticated weekend data exceeds the 24h policy"],
-  ["FEED_AUTHORITY", "REDUCE", "Indicative option data limits authority"],
-  ["POSITION_LIMIT", "PASS", "No open position"],
-  ["PREMIUM_CAP", "PASS", "$425 estimated premium"],
+  ["DATA_FRESHNESS", "PASS", "Replay timestamps are internally fresh"],
+  ["FEED_AUTHORITY", "PASS", "SIP and OPRA entitlements verified"],
+  ["POSITION_LIMIT", "PASS", "Dedicated paper account remains empty"],
+  ["PREMIUM_CAP", "PASS", "$4.05 ask is inside the locked $4.25 limit"],
   ["DAILY_LOSS", "PASS", "$0 of $1,000 lockout used"],
-  ["DUPLICATE_ORDER", "PASS", "No matching client order ID"],
+  ["BROKER_BOUNDARY", "PASS", "Replay stops before identity reservation or submission"],
 ];
 
 const navItems: Array<[ViewName, string, string]> = [
@@ -58,8 +58,8 @@ function InstrumentCard({ instrument }: { instrument: typeof instruments[number]
 function Pipeline() {
   return (
     <div className="decision-flow" aria-label="Decision pipeline">
-      {[["01", "ANALYZE"], ["02", "EVIDENCE"], ["03", "RISK"], ["04", "VERDICT"], ["05", "EXECUTE"]].map(([number, label], index) => (
-        <div className={index === 3 ? "flow-step active" : "flow-step"} key={label}>
+      {[["01", "ANALYZE"], ["02", "EVIDENCE"], ["03", "RISK"], ["04", "VERDICT"], ["05", "REVIEW"]].map(([number, label], index) => (
+        <div className={index === 4 ? "flow-step active" : "flow-step"} key={label}>
           <span>{number}</span><strong>{label}</strong>
         </div>
       ))}
@@ -88,7 +88,7 @@ function DashboardView({ openEvidence }: { openEvidence: () => void }) {
             <div className="chart-glow" />
           </div>
           <div className="market-facts">
-            <div><span>DATA FEED</span><strong>IEX · DEMO</strong></div>
+            <div><span>DATA FEED</span><strong>SIP · DEMO</strong></div>
             <div><span>SESSION</span><strong>REGULAR</strong></div>
             <div><span>REGIME</span><strong>LOW VOL</strong></div>
           </div>
@@ -96,30 +96,30 @@ function DashboardView({ openEvidence }: { openEvidence: () => void }) {
 
         <article className="panel case-panel">
           <div className="panel-heading">
-            <div><span>CURRENT CASE</span><h2>DECISION 017</h2></div>
-            <span className="case-state">PAUSED</span>
+            <div><span>VERIFIED REPLAY</span><h2>BULLISH APPROVE</h2></div>
+            <span className="case-state">REPLAY ONLY</span>
           </div>
           <div className="case-body">
             <section className="case-copy">
               <p className="section-label">AI PROPOSAL</p>
               <h3>BULLISH CALL</h3>
-              <p className="thesis">Continuation above the intraday value area, supported by improving breadth and measured momentum.</p>
+              <p className="thesis">Positive 5-, 15-, and 60-minute returns align above VWAP and the opening range.</p>
               <p className="section-label">STRONGEST COUNTERARGUMENT</p>
-              <p className="counter">Price is approaching resistance while volatility remains compressed.</p>
-              <div className="contract-line"><span>DETERMINISTIC CANDIDATE</span><strong>SPY · 540 CALL · 21 DTE · 1 CONTRACT</strong></div>
+              <p className="counter">A sharp reversal through VWAP and the opening range would invalidate the directional alignment.</p>
+              <div className="contract-line"><span>DETERMINISTIC REPLAY CANDIDATE</span><strong>SPY · 504 CALL · 11 DTE · 2 MAX</strong></div>
               <div className="uncertainty"><span>UNCERTAINTY</span><strong>MEDIUM</strong></div>
               <button className="evidence-button" type="button" onClick={openEvidence}>INSPECT EVIDENCE PASSPORT <span>→</span></button>
             </section>
             <section className="verdict-card">
               <p>REFEREE VERDICT</p>
               <div className="verdict-seal" aria-hidden="true">✓</div>
-              <h3>BLOCK</h3>
-              <span>STALE DATA</span>
+              <h3>APPROVE</h3>
+              <span>REPLAY AUTHORITY ONLY</span>
               <ul>
                 <li>Paper mode confirmed</li>
-                <li>Position limit clear</li>
-                <li>Premium risk bounded</li>
-                <li>Freshness gate closed</li>
+                <li>Six directional states align</li>
+                <li>OPRA-shaped quote validated</li>
+                <li>Broker submission prohibited</li>
               </ul>
             </section>
           </div>
@@ -133,7 +133,7 @@ function DashboardView({ openEvidence }: { openEvidence: () => void }) {
           <p>PAPER PERFORMANCE</p><strong className="positive">$0.00 · 0.00%</strong><span>No broker positions or fills.</span>
         </article>
         <article className="summary-card">
-          <p>POLICY AUTHORITY</p><strong>BLOCKED</strong><span>Stale data prevents proposal and order authority.</span>
+          <p>REPLAY AUTHORITY</p><strong>READY FOR REVIEW</strong><span>Sealed Passport; broker submission remains prohibited.</span>
         </article>
       </div>
     </>
@@ -144,19 +144,19 @@ function EvidenceView() {
   return (
     <section className="view-panel" aria-labelledby="evidence-title">
       <div className="view-heading">
-        <div><p className="eyebrow">DECISION 017 · PASSPORT</p><h2 id="evidence-title">Evidence, not intuition.</h2></div>
-        <span className="passport-id">ID 20260827-0017</span>
+        <div><p className="eyebrow">BULLISH APPROVE · REPLAY PASSPORT</p><h2 id="evidence-title">Evidence, not intuition.</h2></div>
+        <span className="passport-id">CHECKED-IN FIXTURE</span>
       </div>
       <div className="evidence-layout">
         <article className="evidence-brief">
           <p className="section-label">THE CASE</p>
-          <h3>BULLISH CALL · MEDIUM UNCERTAINTY</h3>
-          <p>SPY held above its intraday value area while short-horizon returns and breadth improved. The countercase is resistance near the session high with compressed volatility.</p>
+          <h3>LONG CALL · MEDIUM UNCERTAINTY</h3>
+          <p>Terra cited aligned returns, VWAP, and opening-range evidence. Deterministic code then selected an eligible 11-DTE call and stopped at operator review.</p>
           <dl>
-            <div><dt>MODEL</dt><dd>DEMO PROVIDER · STRUCTURED OUTPUT</dd></div>
-            <div><dt>HORIZON</dt><dd>INTRADAY · FLAT BY 3:40 ET</dd></div>
-            <div><dt>INVALIDATION</dt><dd>LOSS OF VALUE AREA WITH WEAKENING BREADTH</dd></div>
-            <div><dt>FEED</dt><dd>IEX STOCK · INDICATIVE OPTIONS</dd></div>
+            <div><dt>MODEL</dt><dd>GPT-5.6-TERRA · STRICT STRUCTURED OUTPUT</dd></div>
+            <div><dt>HORIZON</dt><dd>INTRADAY</dd></div>
+            <div><dt>INVALIDATION</dt><dd>LOSS OF VWAP AND OPENING RANGE</dd></div>
+            <div><dt>PROVENANCE</dt><dd>CHECKED-IN BARS · OPRA-SHAPED FIXTURE</dd></div>
           </dl>
         </article>
         <article className="referee-ledger">
@@ -170,10 +170,10 @@ function EvidenceView() {
         </article>
       </div>
       <div className="provenance-strip">
-        <div><span>MARKET AS OF</span><strong>REPRESENTATIVE CASE</strong></div>
-        <div><span>LIVE QUOTE AGE</span><strong>OVER 24 HOURS</strong></div>
-        <div><span>POLICY</span><strong>SPY-LONG-V0.1</strong></div>
-        <div><span>LIVE AUTHORITY</span><strong className="amber">BLOCK</strong></div>
+        <div><span>MARKET AS OF</span><strong>2026-08-24 REPLAY</strong></div>
+        <div><span>REPLAY QUOTE AGE</span><strong>5 SECONDS</strong></div>
+        <div><span>POLICY</span><strong>SPY-REPLAY-V0.1</strong></div>
+        <div><span>LIVE AUTHORITY</span><strong className="amber">NONE</strong></div>
       </div>
     </section>
   );
@@ -181,11 +181,11 @@ function EvidenceView() {
 
 function JournalView() {
   const entries = [
-    ["12:42:31", "VERDICT", "Decision 017 reduced — indicative feed authority"],
-    ["12:42:28", "REFEREE", "Eight deterministic checks completed"],
-    ["12:42:24", "EVIDENCE", "Passport 20260827-0017 sealed"],
-    ["12:42:19", "AI", "Bullish thesis with medium uncertainty received"],
-    ["12:42:18", "MARKET", "SPY evidence normalized · quote age 12s"],
+    ["14:30:05", "STOP", "Operator review ready · broker submission false"],
+    ["14:30:04", "EVIDENCE", "Complete replay Passport sealed"],
+    ["14:30:03", "REFEREE", "APPROVE · six supporting states · zero opposition"],
+    ["14:30:02", "AI", "Terra LONG_CALL · medium uncertainty · citations valid"],
+    ["14:30:01", "MARKET", "Checked-in SPY features calculated deterministically"],
   ];
   return (
     <section className="view-panel" aria-labelledby="journal-title">
@@ -209,8 +209,9 @@ function SystemView() {
       <div className="system-grid">
         <article><span>HEALTH STATE</span><strong>PAUSED</strong><p>Authenticated data exceeds the closed-market freshness policy.</p></article>
         <article><span>ALPACA ADAPTER</span><strong>AUTHENTICATED</strong><p>Dedicated paper account reads succeeded; execution remains disabled.</p></article>
+        <article><span>DATA ENTITLEMENT</span><strong>SIP + OPRA</strong><p>Algo Trader Plus feeds are authorized; closed-market timestamps still enforce PAUSED.</p></article>
         <article><span>MCP SURFACE</span><strong>READ ONLY</strong><p>Assets, stock data, options data, and news only. Trading tools are excluded.</p></article>
-        <article><span>TERRA ADAPTER</span><strong>FIXTURE VERIFIED</strong><p>Strict structured output returned NO_TRADE with high uncertainty; no tools or broker interface exist.</p></article>
+        <article><span>TERRA ADAPTER</span><strong>9-CASE VERIFIED</strong><p>Live replay run: 5 approve, 0 reduce, 2 abstain, 2 block; no tools or broker interface.</p></article>
         <article><span>ORDER GATE</span><strong>DOUBLE LOCKED</strong><p>A paper-only flag and exact confirmation are both required.</p></article>
         <article><span>EVIDENCE STORE</span><strong>HEALTHY</strong><p>Connection and data-health events persisted without credentials or account identifiers.</p></article>
         <article><span>INCIDENT POLICY</span><strong>FAIL LOUD</strong><p>Critical failures attach protective action and force PAUSED authority.</p></article>
@@ -254,7 +255,7 @@ export default function Home() {
         </nav>
 
         <div className="health-banner" role="status">
-          <strong>PAUSED</strong><span>Paper authentication and the Terra fixture adapter are verified. IEX and indicative option data exceed the 24-hour weekend freshness policy; displayed market values remain representative and execution is disabled.</span>
+          <strong>PAUSED</strong><span>Paper authentication, SIP, OPRA, and the nine-case Terra replay pipeline are verified. Live market data remains closed-market stale; the replay stops before broker submission and execution is disabled.</span>
         </div>
 
         {activeView === "dashboard" && <DashboardView openEvidence={() => setActiveView("evidence")} />}

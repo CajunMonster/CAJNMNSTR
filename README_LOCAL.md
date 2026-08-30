@@ -4,7 +4,10 @@ This is the local CAJNMNSTR dashboard and paper-integration preparation workspac
 
 - The displayed market and account values are representative demo data, not a live account rendering.
 - The dedicated paper account has passed authenticated read-only verification; credentials remain local and Git-ignored.
+- Algo Trader Plus SIP and OPRA access has passed authenticated read-only verification.
 - Closed-market stale data keeps operational health `PAUSED` and cannot produce execution authority.
+- The nine-case SPY replay cycle calculates deterministic features, validates Terra, runs the
+  Referee and option selector, seals each Passport, and stops before broker submission.
 - Terra accepts checked-in fixture/replay evidence through a strict structured-output adapter only.
 - Alpaca adapters, the durable journal, health supervision, and reconciliation boundaries are prepared.
 - Order submission remains disabled behind an explicit two-part paper-only gate.
