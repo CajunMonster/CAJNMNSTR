@@ -12,6 +12,7 @@ from .errors import (
     ExecutionDisabledError,
     InvalidRefereeResultError,
 )
+from .health import HealthReport, authority_health
 from .journal import Journal
 from .models import (
     AuthorityGrant,
@@ -99,7 +100,7 @@ class PaperExecutionCoordinator:
         journal: Journal,
         broker: BrokerReader,
         executor: PaperExecutor,
-        health_state: Callable[[], HealthState],
+        health_state: Callable[[], HealthReport | HealthState],
     ) -> None:
         self.settings = settings
         self.journal = journal
@@ -110,11 +111,12 @@ class PaperExecutionCoordinator:
     def submit(self, intent: OrderIntent) -> BrokerOrderSnapshot:
         self.settings.require_execution_armed()
         current_health = self.health_state()
-        if current_health is not HealthState.HEALTHY:
-            raise ExecutionDisabledError(
-                "Paper execution requires HEALTHY authority; "
-                f"current state is {current_health.value}"
-            )
+        health_decision = authority_health(
+            current_health,
+            position_intent=intent.position_intent,
+        )
+        if not health_decision.allowed:
+            raise ExecutionDisabledError(health_decision.message)
         payload = asdict(intent)
         if not self.journal.claim_authorized_order(
             client_order_id=intent.client_order_id,
@@ -196,7 +198,7 @@ class OperatorAuthorityPath:
         settings: Settings,
         journal: Journal,
         coordinator: PaperExecutionCoordinator,
-        health_state: Callable[[], HealthState],
+        health_state: Callable[[], HealthReport | HealthState],
     ) -> None:
         self.settings = settings
         self.journal = journal
@@ -263,16 +265,18 @@ class OperatorAuthorityPath:
             )
 
         current_health = self.health_state()
-        if current_health is not HealthState.HEALTHY:
+        health_decision = authority_health(
+            current_health,
+            position_intent=candidate.position_intent,
+        )
+        if not health_decision.allowed:
             self._deny(
                 passport_id=passport_id,
                 passport_exists=True,
                 verdict=verdict.value,
                 authority=authority,
-                reason_code=f"SYSTEM_{current_health.value}",
-                error=ExecutionDisabledError(
-                    f"Authority path requires HEALTHY; current state is {current_health.value}"
-                ),
+                reason_code=health_decision.reason_code or "SYSTEM_HEALTH_UNKNOWN",
+                error=ExecutionDisabledError(health_decision.message),
             )
 
         intent = OrderIntent(

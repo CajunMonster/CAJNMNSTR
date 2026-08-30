@@ -9,6 +9,45 @@ from .config import Settings
 from .journal import Journal, write_emergency_incident
 from .models import EventType, HealthState
 
+ENTRY_CRITICAL_COMPONENTS = frozenset(
+    {
+        "configuration",
+        "evidence_store",
+        "alpaca",
+        "broker_state",
+        "broker_reconciliation",
+        "market_session",
+        "spy_quote",
+        "option_quote",
+        "risk_limits",
+        "ai_provider",
+        "news",
+        "event_calendar",
+    }
+)
+
+EXIT_CRITICAL_COMPONENTS = frozenset(
+    {
+        "configuration",
+        "evidence_store",
+        "alpaca",
+        "broker_state",
+        "broker_reconciliation",
+        "market_session",
+        "option_quote",
+    }
+)
+
+NONCRITICAL_FOR_EXIT_COMPONENTS = frozenset(
+    {
+        "ai_provider",
+        "spy_quote",
+        "risk_limits",
+        "news",
+        "event_calendar",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ComponentHealth:
@@ -31,6 +70,7 @@ class HealthReport:
     components: tuple[ComponentHealth, ...]
     checked_at: datetime
     execution_armed: bool
+    position_management_armed: bool
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,8 +78,90 @@ class HealthReport:
             "state": self.state.value,
             "checked_at": self.checked_at.isoformat(),
             "execution_armed": self.execution_armed,
+            "entry_execution_armed": self.execution_armed,
+            "position_management_armed": self.position_management_armed,
             "components": [component.to_dict() for component in self.components],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorityHealthDecision:
+    allowed: bool
+    state: HealthState
+    blockers: tuple[str, ...]
+    reason_code: str | None
+    message: str
+
+
+def authority_health(
+    health: HealthReport | HealthState,
+    *,
+    position_intent: str,
+) -> AuthorityHealthDecision:
+    """Apply component-specific health without granting a generic exit bypass."""
+
+    position_management = position_intent == "sell_to_close"
+    if isinstance(health, HealthState):
+        allowed = health is HealthState.HEALTHY
+        return AuthorityHealthDecision(
+            allowed=allowed,
+            state=health,
+            blockers=() if allowed else ("aggregate_health",),
+            reason_code=None if allowed else f"SYSTEM_{health.value}",
+            message=(
+                "Health authority is HEALTHY."
+                if allowed
+                else f"Execution requires HEALTHY authority; current state is {health.value}"
+            ),
+        )
+
+    blockers = _component_blockers(
+        health.components,
+        position_management=position_management,
+    )
+    if not blockers:
+        return AuthorityHealthDecision(
+            allowed=True,
+            state=HealthState.HEALTHY,
+            blockers=(),
+            reason_code=None,
+            message=(
+                "Position-management-critical health is available."
+                if position_management
+                else "Entry-critical health is available."
+            ),
+        )
+
+    blocker_names = tuple(component.component for component in blockers)
+    blocker_state = _aggregate(component.state for component in blockers)
+    if not position_management:
+        reason_code = f"SYSTEM_{blocker_state.value}"
+        message = (
+            "New entry requires all entry-critical health; blocked by "
+            + ", ".join(blocker_names)
+        )
+    elif {"alpaca", "broker_state", "broker_reconciliation"} & set(blocker_names):
+        reason_code = "EXIT_RECONCILIATION_REQUIRED"
+        message = "Position exit requires known, reconciled Alpaca broker state"
+    elif "market_session" in blocker_names:
+        reason_code = "EXIT_PENDING_MARKET_SESSION"
+        message = "Position exit remains pending until the market session is executable"
+    elif "option_quote" in blocker_names:
+        reason_code = "EXIT_PENDING_OPTION_QUOTE"
+        message = "Position exit remains pending until an executable option quote is available"
+    elif "evidence_store" in blocker_names:
+        reason_code = "EXIT_EVIDENCE_STORE_UNAVAILABLE"
+        message = "Position exit requires durable authority and emergency incident persistence"
+    else:
+        reason_code = "EXIT_HEALTH_BLOCKED"
+        message = "Position exit is blocked by an unclassified critical health component"
+    return AuthorityHealthDecision(
+        allowed=False,
+        state=blocker_state,
+        blockers=blocker_names,
+        reason_code=reason_code,
+        message=message,
+    )
 
 
 def freshness_health(
@@ -139,11 +261,16 @@ class HealthSupervisor:
         components.append(self._alpaca_health(checked_at))
         components.append(self._ai_health(checked_at))
         state = _aggregate(component.state for component in components)
+        entry_blockers = _component_blockers(components, position_management=False)
+        exit_blockers = _component_blockers(components, position_management=True)
         report = HealthReport(
             state=state,
             components=tuple(components),
             checked_at=checked_at,
-            execution_armed=self.settings.execution_armed and state is HealthState.HEALTHY,
+            execution_armed=self.settings.execution_armed and not entry_blockers,
+            position_management_armed=(
+                self.settings.execution_armed and not exit_blockers
+            ),
         )
 
         if journal is not None:
@@ -154,7 +281,8 @@ class HealthSupervisor:
                     severity="INFO" if state is HealthState.HEALTHY else "WARNING",
                     payload=report.to_dict(),
                     protective_action=(
-                        "Block paper execution while health is not HEALTHY."
+                        "Block new entries; position management follows its narrower "
+                        "component-specific health policy."
                         if state is not HealthState.HEALTHY
                         else None
                     ),
@@ -266,3 +394,40 @@ def _aggregate(states: Any) -> HealthState:
     if HealthState.DEGRADED in values:
         return HealthState.DEGRADED
     return HealthState.HEALTHY
+
+
+def _component_blockers(
+    components: list[ComponentHealth] | tuple[ComponentHealth, ...],
+    *,
+    position_management: bool,
+) -> tuple[ComponentHealth, ...]:
+    required = (
+        EXIT_CRITICAL_COMPONENTS
+        if position_management
+        else ENTRY_CRITICAL_COMPONENTS
+    )
+    present = {component.component for component in components}
+    checked_at = components[0].checked_at if components else datetime.now(UTC)
+    missing = tuple(
+        ComponentHealth(
+            component=component,
+            state=HealthState.PAUSED,
+            message="Required health component was not evaluated.",
+            protective_action="Fail closed until this health component is evaluated.",
+            checked_at=checked_at,
+        )
+        for component in sorted(required - present)
+    )
+    nonhealthy = tuple(
+        component for component in components if component.state is not HealthState.HEALTHY
+    )
+    if not position_management:
+        return nonhealthy + missing
+    return (
+        tuple(
+            component
+            for component in nonhealthy
+            if component.component not in NONCRITICAL_FOR_EXIT_COMPONENTS
+        )
+        + missing
+    )

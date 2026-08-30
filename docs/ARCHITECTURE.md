@@ -27,7 +27,7 @@ The operator authority path has independent safety conditions:
 6. `EXIT` accepts only `sell_to_close` position management;
 7. environment is exactly `paper` and the trading URL is the paper endpoint;
 8. credentials are present locally and both explicit execution controls are armed;
-9. operational health is exactly `HEALTHY`;
+9. entry-critical health is available, while `sell_to_close` applies the narrower documented position-management profile;
 10. a unique `cajnmnstr-` client identity is durably authorized before submission.
 
 The coordinator independently requires the durable authorization row, so a direct call from AI, MCP, or another bypass fails closed. The model-neutral AI port returns analysis only, and the MCP configuration exposes no trading toolset. The deterministic Referee, operator authority path, execution coordinator, and reconciliation remain separate layers.
@@ -54,7 +54,19 @@ Weekend AI verification accepts only checked-in fixture/replay evidence explicit
 
 ## Fail-loud health
 
-The health supervisor emits `HEALTHY`, `DEGRADED`, or `PAUSED`. A critical configuration, stale-data, Alpaca, or evidence-store failure carries a protective action. A non-healthy critical component blocks execution. Journal failures fall back to an ignored local emergency incident log so loss of the evidence store is still visible and persistent.
+The health supervisor emits `HEALTHY`, `DEGRADED`, or `PAUSED`. A critical configuration, stale-data, Alpaca, or evidence-store failure carries a protective action. Journal failures fall back to an ignored local emergency incident log so loss of the evidence store is still visible and persistent.
+
+Health authority is intentionally different for new entries and existing-position exits:
+
+- `ENTRY_CRITICAL`: configuration, evidence store, Alpaca connectivity, known broker state, broker reconciliation, executable market session, fresh SPY and option quotes, risk limits, AI provider, news health, and event-calendar health.
+- `EXIT_CRITICAL`: configuration, evidence store/durable authority, Alpaca connectivity, known broker state, broker reconciliation, executable market session, and an executable option quote for the current limit-only exit path.
+- `NONCRITICAL_FOR_EXIT`: AI provider, SPY analytical quote, daily-loss entry lock, news, and event-calendar context.
+
+Only explicitly named noncritical components may be ignored for `sell_to_close`. A missing required component, an aggregate-only non-healthy result, or an unknown non-healthy condition still fails closed. A stale option quote or closed/halted market retains `EXIT` authority as pending without recording a fill. Uncertain Alpaca or broker state requires reconciliation before any retry, preventing a blind duplicate close. Daily-loss locks block new exposure but cannot trap an existing position. Forced-EOD liquidation does not depend on Terra or Sol.
+
+`CAJNMNSTR_EXECUTION_ENABLED` and its exact confirmation remain the current master broker gate, so disabling them blocks both entry and exit. Splitting discretionary-entry arming from emergency position-management permission requires an explicit owner decision; this review does not silently change that control.
+
+Broker-native option stop and stop-limit protection is deferred. It may be reconsidered only as a disaster backstop after the first live competition session and after its separate lifecycle, cancellation, replacement, and reconciliation design is proven.
 
 ## Durable evidence
 
