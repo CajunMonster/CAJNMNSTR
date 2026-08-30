@@ -36,7 +36,7 @@ try {
         }
         $fullPath = Join-Path $projectRoot $relativePath
         try {
-            $content = [IO.File]::ReadAllText($fullPath)
+            $content = [IO.File]::ReadAllText($fullPath).Replace("`r`n", "`n")
         }
         catch {
             $blocked.Add([pscustomobject]@{ Category = 'UnreadableCandidate'; Path = $relativePath })

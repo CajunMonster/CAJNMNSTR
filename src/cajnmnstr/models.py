@@ -126,6 +126,11 @@ class OrderCandidate:
             raise ValueError("Side must be buy or sell")
         if self.position_intent not in {"buy_to_open", "sell_to_close"}:
             raise ValueError("Only buy-to-open and sell-to-close candidates are accepted")
+        if (self.side, self.position_intent) not in {
+            ("buy", "buy_to_open"),
+            ("sell", "sell_to_close"),
+        }:
+            raise ValueError("Position intent must match a risk-valid opening or closing side")
         if not self.client_order_id.startswith("cajnmnstr-"):
             raise ValueError("Client order ID must use the cajnmnstr- namespace")
 
@@ -162,6 +167,11 @@ class OrderIntent:
             raise ValueError("Side must be buy or sell")
         if self.position_intent not in {"buy_to_open", "sell_to_close"}:
             raise ValueError("Only buy-to-open and sell-to-close option intents are accepted")
+        if (self.side, self.position_intent) not in {
+            ("buy", "buy_to_open"),
+            ("sell", "sell_to_close"),
+        }:
+            raise ValueError("Position intent must match a risk-valid opening or closing side")
         if not self.client_order_id.startswith("cajnmnstr-"):
             raise ValueError("Client order ID must use the cajnmnstr- namespace")
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -29,9 +30,25 @@ test("server-renders the CAJNMNSTR dashboard", async () => {
   assert.match(html, /RECENT ACTIVITY/);
   assert.match(html, /SYSTEM HEALTH/);
   assert.match(html, /REPLAY/);
-  assert.match(html, /EXECUTION(?:<!-- -->|\s)*DISABLED/);
+  assert.match(html, /ENTRY(?:<!-- -->|\s)*DISABLED/);
+  assert.match(html, /POSITION MANAGEMENT/);
+  assert.match(html, /BROKER LOCK/);
+  assert.match(html, /CLEAR/);
   assert.match(html, /STOP BEFORE BROKER/);
   assert.doesNotMatch(html, /AI MAKES THE CASE|EVIDENCE DECIDES/);
   assert.doesNotMatch(html, /GOLD \/ XAU|SILVER \/ XAG|BITCOIN \/ BTC/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
+});
+
+test("dashboard state exposes separate broker authorities without the legacy switch", async () => {
+  const state = JSON.parse(
+    await readFile(new URL("../public/dashboard-state.json", import.meta.url), "utf8"),
+  );
+  assert.equal(state.controls.entry_enabled, false);
+  assert.equal(state.controls.entry_armed, false);
+  assert.equal(state.controls.position_management_enabled, true);
+  assert.equal(state.controls.position_management_armed, false);
+  assert.equal(state.controls.broker_lock_active, false);
+  assert.equal("execution_enabled" in state.controls, false);
+  assert.equal("execution_armed" in state.controls, false);
 });

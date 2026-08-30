@@ -19,7 +19,9 @@ The AI may make a case. It never receives trading authority.
 - Market/account values in the UI: representative; closed-market data remains `PAUSED` and non-actionable
 - Market-data entitlement: Algo Trader Plus verified read-only with SIP equities and OPRA options
 - Alpaca and OpenAI credentials: local only and intentionally absent from the repository
-- Execution: disabled by default and guarded by two explicit paper-only settings
+- New-entry authority: disabled by default and independent from deterministic position management
+- Position management: enabled by default but cannot act without the paper confirmation, a verified existing position, exit-critical health, and durable EXIT authority
+- Broker lock: explicit highest-level freeze, clear by default, and authoritative over both paths
 - SPY decision cycle: nine checked-in replay cases reach a sealed Passport and operator-review
   boundary, then stop before broker submission
 - Terra: the configured adapter completed the nine-case replay with strict structured output; it
@@ -83,3 +85,8 @@ uv run cajnmnstr health --live
 These commands read account, clock, SPY quote, option contracts, option chain, and provider
 health; they cannot submit an order. `verify-terra` and `replay-cycle --live-terra` send only
 checked-in replay evidence to OpenAI and accept analysis output only.
+
+The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
+migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
+`CAJNMNSTR_POSITION_MANAGEMENT_ENABLED`, and `CAJNMNSTR_BROKER_LOCK`; conflicting legacy and
+explicit entry values fail closed.

@@ -69,17 +69,18 @@ class HealthReport:
     state: HealthState
     components: tuple[ComponentHealth, ...]
     checked_at: datetime
-    execution_armed: bool
+    entry_armed: bool
     position_management_armed: bool
+    broker_lock_active: bool
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "app": "CAJNMNSTR",
             "state": self.state.value,
             "checked_at": self.checked_at.isoformat(),
-            "execution_armed": self.execution_armed,
-            "entry_execution_armed": self.execution_armed,
+            "entry_armed": self.entry_armed,
             "position_management_armed": self.position_management_armed,
+            "broker_lock_active": self.broker_lock_active,
             "components": [component.to_dict() for component in self.components],
         }
 
@@ -102,17 +103,28 @@ def authority_health(
 
     position_management = position_intent == "sell_to_close"
     if isinstance(health, HealthState):
-        allowed = health is HealthState.HEALTHY
+        if health is HealthState.HEALTHY:
+            return AuthorityHealthDecision(
+                allowed=False,
+                state=HealthState.PAUSED,
+                blockers=("component_health_unavailable",),
+                reason_code=(
+                    "EXIT_HEALTH_DETAIL_REQUIRED"
+                    if position_management
+                    else "ENTRY_HEALTH_DETAIL_REQUIRED"
+                ),
+                message=(
+                    "Component-level position-management health is required"
+                    if position_management
+                    else "Component-level entry health is required"
+                ),
+            )
         return AuthorityHealthDecision(
-            allowed=allowed,
+            allowed=False,
             state=health,
-            blockers=() if allowed else ("aggregate_health",),
-            reason_code=None if allowed else f"SYSTEM_{health.value}",
-            message=(
-                "Health authority is HEALTHY."
-                if allowed
-                else f"Execution requires HEALTHY authority; current state is {health.value}"
-            ),
+            blockers=("aggregate_health",),
+            reason_code=f"SYSTEM_{health.value}",
+            message=f"Execution requires HEALTHY authority; current state is {health.value}",
         )
 
     blockers = _component_blockers(
@@ -267,10 +279,11 @@ class HealthSupervisor:
             state=state,
             components=tuple(components),
             checked_at=checked_at,
-            execution_armed=self.settings.execution_armed and not entry_blockers,
+            entry_armed=self.settings.entry_armed and not entry_blockers,
             position_management_armed=(
-                self.settings.execution_armed and not exit_blockers
+                self.settings.position_management_armed and not exit_blockers
             ),
+            broker_lock_active=self.settings.broker_lock,
         )
 
         if journal is not None:

@@ -8,12 +8,13 @@ from decimal import Decimal
 from .config import Settings
 from .errors import (
     AuthorityDeniedError,
+    BrokerLockedError,
     DuplicateOrderIdentityError,
     ExecutionDisabledError,
     InvalidRefereeResultError,
 )
 from .health import HealthReport, authority_health
-from .journal import Journal
+from .journal import Journal, write_emergency_incident
 from .models import (
     AuthorityGrant,
     BrokerOrderSnapshot,
@@ -26,6 +27,54 @@ from .models import (
     RefereeVerdict,
 )
 from .ports import BrokerReader, PaperExecutor
+
+
+def _authority_denial_code(
+    error: ExecutionDisabledError,
+    *,
+    position_intent: str,
+) -> str:
+    if isinstance(error, BrokerLockedError):
+        return "BROKER_LOCK_ACTIVE"
+    if position_intent == "sell_to_close":
+        return "POSITION_MANAGEMENT_DISABLED"
+    return "ENTRY_AUTHORITY_DISABLED"
+
+
+def _persist_critical_authority_incident(
+    settings: Settings,
+    journal: Journal,
+    *,
+    component: str,
+    message: str,
+    protective_action: str,
+) -> None:
+    payload = {
+        "component": component,
+        "state": HealthState.PAUSED.value,
+        "message": message,
+        "protective_action": protective_action,
+    }
+    try:
+        journal.open_incident(
+            component=component,
+            severity="CRITICAL",
+            state=HealthState.PAUSED.value,
+            message=message,
+            protective_action=protective_action,
+        )
+        journal.append_event(
+            EventType.INCIDENT,
+            source="broker_authority",
+            severity="CRITICAL",
+            payload=payload,
+            protective_action=protective_action,
+        )
+    except Exception as exc:
+        write_emergency_incident(
+            settings.emergency_incident_path,
+            {**payload, "journal_error": type(exc).__name__},
+        )
 
 
 class DeterministicReferee:
@@ -109,7 +158,29 @@ class PaperExecutionCoordinator:
         self.health_state = health_state
 
     def submit(self, intent: OrderIntent) -> BrokerOrderSnapshot:
-        self.settings.require_execution_armed()
+        try:
+            self.settings.require_order_authority(intent.position_intent)
+        except ExecutionDisabledError as exc:
+            if intent.position_intent == "sell_to_close" or isinstance(
+                exc, BrokerLockedError
+            ):
+                component = (
+                    "broker_lock"
+                    if isinstance(exc, BrokerLockedError)
+                    else "position_management_authority"
+                )
+                _persist_critical_authority_incident(
+                    self.settings,
+                    self.journal,
+                    component=component,
+                    message=str(exc),
+                    protective_action=(
+                        "Do not submit until the owner clears the broker lock."
+                        if isinstance(exc, BrokerLockedError)
+                        else "Restore explicit position-management authority or close manually."
+                    ),
+                )
+            raise
         current_health = self.health_state()
         health_decision = authority_health(
             current_health,
@@ -117,6 +188,8 @@ class PaperExecutionCoordinator:
         )
         if not health_decision.allowed:
             raise ExecutionDisabledError(health_decision.message)
+        if intent.position_intent == "sell_to_close":
+            self._verify_existing_long_position(intent)
         payload = asdict(intent)
         if not self.journal.claim_authorized_order(
             client_order_id=intent.client_order_id,
@@ -189,6 +262,45 @@ class PaperExecutionCoordinator:
         )
         return order
 
+    def _verify_existing_long_position(self, intent: OrderIntent) -> None:
+        try:
+            positions = self.broker.list_positions()
+        except Exception as exc:
+            message = (
+                "Existing position could not be verified; broker reconciliation is required"
+            )
+            _persist_critical_authority_incident(
+                self.settings,
+                self.journal,
+                component="broker_reconciliation",
+                message=message,
+                protective_action="Do not send a blind exit; reconcile broker state first.",
+            )
+            raise ExecutionDisabledError(message) from exc
+
+        matches = [position for position in positions if position.symbol == intent.symbol]
+        verified = (
+            len(matches) == 1
+            and matches[0].side.lower() == "long"
+            and matches[0].quantity >= Decimal(intent.quantity)
+        )
+        if verified:
+            self.journal.resolve_incidents("position_management_position")
+            return
+
+        message = (
+            "Position-management authority requires a verified existing long position "
+            "with sufficient quantity"
+        )
+        _persist_critical_authority_incident(
+            self.settings,
+            self.journal,
+            component="position_management_position",
+            message=message,
+            protective_action="Block the exit intent and reconcile the actual broker position.",
+        )
+        raise AuthorityDeniedError(message)
+
 
 class OperatorAuthorityPath:
     """The only application path from sealed evidence to broker coordination."""
@@ -253,14 +365,37 @@ class OperatorAuthorityPath:
         )
 
         try:
-            self.settings.require_execution_armed()
+            self.settings.require_order_authority(candidate.position_intent)
         except ExecutionDisabledError as exc:
+            reason_code = _authority_denial_code(
+                exc,
+                position_intent=candidate.position_intent,
+            )
+            if candidate.position_intent == "sell_to_close" or isinstance(
+                exc, BrokerLockedError
+            ):
+                component = (
+                    "broker_lock"
+                    if isinstance(exc, BrokerLockedError)
+                    else "position_management_authority"
+                )
+                _persist_critical_authority_incident(
+                    self.settings,
+                    self.journal,
+                    component=component,
+                    message=str(exc),
+                    protective_action=(
+                        "Do not submit until the owner clears the broker lock."
+                        if isinstance(exc, BrokerLockedError)
+                        else "Restore explicit position-management authority or close manually."
+                    ),
+                )
             self._deny(
                 passport_id=passport_id,
                 passport_exists=True,
                 verdict=verdict.value,
                 authority=authority,
-                reason_code="EXECUTION_DISABLED",
+                reason_code=reason_code,
                 error=exc,
             )
 

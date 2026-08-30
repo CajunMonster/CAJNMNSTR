@@ -195,7 +195,7 @@ class AlpacaAdapter:
         return parse_option_chain_payload(payload, feed=feed)[0]
 
     def submit_limit_order(self, intent: OrderIntent) -> BrokerOrderSnapshot:
-        self.settings.require_execution_armed()
+        self.settings.require_order_authority(intent.position_intent)
         from alpaca.trading.enums import OrderSide, PositionIntent, TimeInForce
         from alpaca.trading.requests import LimitOrderRequest
 
@@ -253,7 +253,7 @@ class AlpacaAdapter:
         ]
 
     def cancel_order(self, broker_order_id: str) -> None:
-        self.settings.require_execution_armed()
+        self.settings.require_position_management_armed()
         self._trading.cancel_order_by_id(broker_order_id)
 
     @staticmethod

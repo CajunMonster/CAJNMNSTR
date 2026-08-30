@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -24,6 +25,7 @@ from cajnmnstr.models import (
     HealthState,
     OrderCandidate,
     OrderIntent,
+    PositionSnapshot,
     RefereeVerdict,
 )
 from cajnmnstr.services import (
@@ -34,9 +36,14 @@ from cajnmnstr.services import (
 
 
 class MockBroker:
-    def __init__(self, journal: Journal) -> None:
+    def __init__(
+        self,
+        journal: Journal,
+        positions: list[PositionSnapshot] | None = None,
+    ) -> None:
         self.journal = journal
         self.submissions: list[OrderIntent] = []
+        self.positions = positions if positions is not None else [verified_position()]
 
     def submit_limit_order(self, intent: OrderIntent) -> BrokerOrderSnapshot:
         assert self.journal.broker_order_status(intent.client_order_id) == "SUBMISSION_PENDING"
@@ -57,8 +64,28 @@ class MockBroker:
     def get_order_by_client_id(self, client_order_id: str) -> BrokerOrderSnapshot:
         raise AssertionError(f"Duplicate lookup must not occur: {client_order_id}")
 
+    def list_positions(self) -> list[PositionSnapshot]:
+        return list(self.positions)
 
-def settings(tmp_path: Path, *, enabled: bool = True) -> Settings:
+
+def verified_position(*, quantity: Decimal = Decimal("2")) -> PositionSnapshot:
+    return PositionSnapshot(
+        symbol="SPY260918C00540000",
+        quantity=quantity,
+        side="long",
+        market_value=Decimal("850"),
+        average_entry_price=Decimal("4.25"),
+        unrealized_pl=Decimal("0"),
+    )
+
+
+def settings(
+    tmp_path: Path,
+    *,
+    entry_enabled: bool = True,
+    position_management_enabled: bool = True,
+    broker_lock: bool = False,
+) -> Settings:
     return Settings.from_env(
         {
             "CAJNMNSTR_ENV": "paper",
@@ -66,7 +93,11 @@ def settings(tmp_path: Path, *, enabled: bool = True) -> Settings:
             "ALPACA_API_BASE_URL": PAPER_API_URL,
             "ALPACA_API_KEY": "mock-paper-key",
             "ALPACA_SECRET_KEY": "mock-paper-secret",
-            "CAJNMNSTR_EXECUTION_ENABLED": "true" if enabled else "false",
+            "CAJNMNSTR_ENTRY_ENABLED": "true" if entry_enabled else "false",
+            "CAJNMNSTR_POSITION_MANAGEMENT_ENABLED": (
+                "true" if position_management_enabled else "false"
+            ),
+            "CAJNMNSTR_BROKER_LOCK": "true" if broker_lock else "false",
             "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
         },
         load_local_file=False,
@@ -97,11 +128,19 @@ def authority_fixture(
     verdict: RefereeVerdict = RefereeVerdict.APPROVE,
     max_quantity: int | None = 2,
     max_limit_price: Decimal | None = Decimal("4.25"),
-    health: HealthReport | HealthState = HealthState.HEALTHY,
-    execution_enabled: bool = True,
+    health: HealthReport | HealthState | None = None,
+    entry_enabled: bool = True,
+    position_management_enabled: bool = True,
+    broker_lock: bool = False,
+    positions: list[PositionSnapshot] | None = None,
     referee_reason: str | None = None,
 ) -> tuple[Journal, MockBroker, PaperExecutionCoordinator, OperatorAuthorityPath]:
-    configured = settings(tmp_path, enabled=execution_enabled)
+    configured = settings(
+        tmp_path,
+        entry_enabled=entry_enabled,
+        position_management_enabled=position_management_enabled,
+        broker_lock=broker_lock,
+    )
     journal = Journal(configured.journal_path)
     journal.initialize()
     journal.create_passport("passport-001", {"symbol": "SPY"})
@@ -113,10 +152,12 @@ def authority_fixture(
         max_quantity=max_quantity,
         max_limit_price=max_limit_price,
     )
-    broker = MockBroker(journal)
+    broker = MockBroker(journal, positions)
+
+    resolved_health = health if health is not None else detailed_health()
 
     def current_health() -> HealthReport | HealthState:
-        return health
+        return resolved_health
 
     coordinator = PaperExecutionCoordinator(
         configured, journal, broker, broker, current_health
@@ -167,7 +208,7 @@ def detailed_health(**overrides: HealthState) -> HealthReport:
         state=aggregate,
         components=components,
         checked_at=checked_at,
-        execution_armed=all(
+        entry_armed=all(
             states[component] is HealthState.HEALTHY
             for component in ENTRY_CRITICAL_COMPONENTS
         ),
@@ -175,6 +216,7 @@ def detailed_health(**overrides: HealthState) -> HealthReport:
             states[component] is HealthState.HEALTHY
             for component in EXIT_CRITICAL_COMPONENTS
         ),
+        broker_lock_active=False,
     )
 
 
@@ -278,6 +320,29 @@ def test_paused_or_stale_health_never_submits(tmp_path: Path) -> None:
     assert last_transition(journal)["reason_code"] == "SYSTEM_PAUSED"
 
 
+def test_aggregate_healthy_without_reconciliation_detail_fails_closed(
+    tmp_path: Path,
+) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        verdict=RefereeVerdict.EXIT,
+        max_quantity=1,
+        health=HealthState.HEALTHY,
+    )
+    with pytest.raises(ExecutionDisabledError, match="Component-level"):
+        authority.execute(
+            passport_id="passport-001",
+            candidate=candidate(
+                quantity=1,
+                client_order_id="cajnmnstr-aggregate-health-exit",
+                side="sell",
+                position_intent="sell_to_close",
+            ),
+        )
+    assert broker.submissions == []
+    assert last_transition(journal)["reason_code"] == "EXIT_HEALTH_DETAIL_REQUIRED"
+
+
 @pytest.mark.parametrize("ai_state", [HealthState.DEGRADED, HealthState.PAUSED])
 def test_ai_failure_blocks_entry_but_not_existing_position_exit(
     tmp_path: Path,
@@ -352,8 +417,9 @@ def test_missing_exit_critical_health_component_fails_closed(tmp_path: Path) -> 
             if component.component != "broker_reconciliation"
         ),
         checked_at=complete.checked_at,
-        execution_armed=True,
+        entry_armed=True,
         position_management_armed=True,
+        broker_lock_active=False,
     )
     journal, broker, _, authority = authority_fixture(
         tmp_path,
@@ -579,38 +645,158 @@ def test_malformed_referee_verdict_is_rejected(tmp_path: Path) -> None:
     assert last_transition(journal)["reason_code"] == "REFEREE_VERDICT_INVALID"
 
 
-def test_execution_disabled_overrides_valid_approve(tmp_path: Path) -> None:
+def test_entry_disabled_with_no_position_never_submits(tmp_path: Path) -> None:
     journal, broker, _, authority = authority_fixture(
         tmp_path,
-        execution_enabled=False,
+        entry_enabled=False,
+        positions=[],
     )
 
-    with pytest.raises(ExecutionDisabledError, match="execution is disabled"):
+    with pytest.raises(ExecutionDisabledError, match="New-entry authority is disabled"):
         authority.execute(passport_id="passport-001", candidate=candidate())
 
     assert broker.submissions == []
-    assert last_transition(journal)["reason_code"] == "EXECUTION_DISABLED"
+    assert last_transition(journal)["reason_code"] == "ENTRY_AUTHORITY_DISABLED"
 
 
-def test_execution_disabled_remains_a_master_gate_for_exit(tmp_path: Path) -> None:
+def test_entry_disabled_with_verified_position_allows_deterministic_exit(
+    tmp_path: Path,
+) -> None:
     journal, broker, _, authority = authority_fixture(
         tmp_path,
         verdict=RefereeVerdict.EXIT,
         max_quantity=1,
-        execution_enabled=False,
+        entry_enabled=False,
     )
-    with pytest.raises(ExecutionDisabledError, match="execution is disabled"):
+    authority.execute(
+        passport_id="passport-001",
+        candidate=candidate(
+            quantity=1,
+            client_order_id="cajnmnstr-entry-disabled-exit",
+            side="sell",
+            position_intent="sell_to_close",
+        ),
+    )
+    assert len(broker.submissions) == 1
+    assert last_transition(journal)["authority_granted"] == "POSITION_MANAGEMENT"
+
+
+def test_position_management_disabled_blocks_exit_and_persists_critical_incident(
+    tmp_path: Path,
+) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        verdict=RefereeVerdict.EXIT,
+        max_quantity=1,
+        position_management_enabled=False,
+    )
+    with pytest.raises(ExecutionDisabledError, match="Position-management authority"):
         authority.execute(
             passport_id="passport-001",
             candidate=candidate(
                 quantity=1,
-                client_order_id="cajnmnstr-disabled-exit",
+                client_order_id="cajnmnstr-pm-disabled-exit",
                 side="sell",
                 position_intent="sell_to_close",
             ),
         )
     assert broker.submissions == []
-    assert last_transition(journal)["reason_code"] == "EXECUTION_DISABLED"
+    assert last_transition(journal)["reason_code"] == "POSITION_MANAGEMENT_DISABLED"
+    with sqlite3.connect(journal.path) as connection:
+        incident = connection.execute(
+            """SELECT severity, component FROM health_incidents
+            WHERE resolved_at IS NULL ORDER BY opened_at DESC LIMIT 1"""
+        ).fetchone()
+    assert incident == ("CRITICAL", "position_management_authority")
+
+
+@pytest.mark.parametrize(
+    ("verdict", "order_candidate"),
+    [
+        (RefereeVerdict.APPROVE, candidate()),
+        (
+            RefereeVerdict.EXIT,
+            candidate(
+                quantity=1,
+                client_order_id="cajnmnstr-locked-exit",
+                side="sell",
+                position_intent="sell_to_close",
+            ),
+        ),
+    ],
+)
+def test_hard_broker_lock_blocks_all_submissions(
+    tmp_path: Path,
+    verdict: RefereeVerdict,
+    order_candidate: OrderCandidate,
+) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        verdict=verdict,
+        max_quantity=1 if verdict is RefereeVerdict.EXIT else 2,
+        broker_lock=True,
+    )
+    with pytest.raises(ExecutionDisabledError, match="broker lock is active"):
+        authority.execute(passport_id="passport-001", candidate=order_candidate)
+    assert broker.submissions == []
+    assert last_transition(journal)["reason_code"] == "BROKER_LOCK_ACTIVE"
+
+
+def test_position_management_requires_verified_existing_position(tmp_path: Path) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        verdict=RefereeVerdict.EXIT,
+        max_quantity=1,
+        entry_enabled=False,
+        positions=[],
+    )
+    with pytest.raises(AuthorityDeniedError, match="verified existing long position"):
+        authority.execute(
+            passport_id="passport-001",
+            candidate=candidate(
+                quantity=1,
+                client_order_id="cajnmnstr-no-position-exit",
+                side="sell",
+                position_intent="sell_to_close",
+            ),
+        )
+    assert broker.submissions == []
+    incidents = journal.list_events(EventType.INCIDENT)
+    assert incidents[-1]["severity"] == "CRITICAL"
+    assert incidents[-1]["payload"]["component"] == "position_management_position"
+
+
+def test_position_management_cannot_sell_more_than_verified_position(
+    tmp_path: Path,
+) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        verdict=RefereeVerdict.EXIT,
+        max_quantity=3,
+        entry_enabled=False,
+        positions=[verified_position(quantity=Decimal("2"))],
+    )
+    with pytest.raises(AuthorityDeniedError, match="sufficient quantity"):
+        authority.execute(
+            passport_id="passport-001",
+            candidate=candidate(
+                quantity=3,
+                client_order_id="cajnmnstr-over-close-exit",
+                side="sell",
+                position_intent="sell_to_close",
+            ),
+        )
+    assert broker.submissions == []
+
+
+def test_position_management_intent_cannot_use_an_exposure_increasing_side() -> None:
+    with pytest.raises(ValueError, match="risk-valid"):
+        candidate(
+            quantity=1,
+            client_order_id="cajnmnstr-invalid-close-side",
+            side="buy",
+            position_intent="sell_to_close",
+        )
 
 
 def test_direct_coordinator_call_without_operator_authorization_fails_closed(

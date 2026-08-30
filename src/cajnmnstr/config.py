@@ -7,7 +7,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .errors import ConfigurationError, CredentialsMissingError, ExecutionDisabledError
+from .errors import (
+    BrokerLockedError,
+    ConfigurationError,
+    CredentialsMissingError,
+    ExecutionDisabledError,
+)
 
 PAPER_API_URL = "https://paper-api.alpaca.markets"
 EXECUTION_CONFIRMATION = "PAPER_ONLY_I_ACCEPT"
@@ -49,8 +54,11 @@ class Settings:
     stock_feed: str
     options_feed: str
     data_entitlement: str
-    execution_enabled: bool
+    entry_enabled: bool
+    position_management_enabled: bool
+    broker_lock: bool
     execution_confirmation: str | None
+    legacy_execution_alias_present: bool
     ai_provider: str
     openai_api_key: str | None
     openai_model: str
@@ -68,6 +76,17 @@ class Settings:
         env = os.environ if environ is None else environ
         environment = env.get("CAJNMNSTR_ENV", "paper").strip().lower()
         paper_mode = environment == "paper"
+        explicit_entry_value = env.get("CAJNMNSTR_ENTRY_ENABLED")
+        legacy_entry_value = env.get("CAJNMNSTR_EXECUTION_ENABLED")
+        if (
+            explicit_entry_value is not None
+            and legacy_entry_value is not None
+            and _bool(explicit_entry_value) != _bool(legacy_entry_value)
+        ):
+            raise ConfigurationError(
+                "CAJNMNSTR_ENTRY_ENABLED conflicts with the deprecated entry-only "
+                "CAJNMNSTR_EXECUTION_ENABLED alias"
+            )
         settings = cls(
             environment=environment,
             data_root=Path(env.get("CAJNMNSTR_DATA_ROOT", r"F:\CAJNMNSTR")),
@@ -79,8 +98,18 @@ class Settings:
             stock_feed=env.get("ALPACA_STOCK_FEED", "iex").strip().lower(),
             options_feed=env.get("ALPACA_OPTIONS_FEED", "indicative").strip().lower(),
             data_entitlement=env.get("ALPACA_DATA_ENTITLEMENT", "unknown").strip().lower(),
-            execution_enabled=_bool(env.get("CAJNMNSTR_EXECUTION_ENABLED"), default=False),
+            entry_enabled=_bool(
+                explicit_entry_value
+                if explicit_entry_value is not None
+                else legacy_entry_value,
+                default=False,
+            ),
+            position_management_enabled=_bool(
+                env.get("CAJNMNSTR_POSITION_MANAGEMENT_ENABLED"), default=True
+            ),
+            broker_lock=_bool(env.get("CAJNMNSTR_BROKER_LOCK"), default=False),
             execution_confirmation=env.get("CAJNMNSTR_EXECUTION_CONFIRMATION") or None,
+            legacy_execution_alias_present=legacy_entry_value is not None,
             ai_provider=env.get("CAJNMNSTR_AI_PROVIDER", "openai").strip().lower(),
             openai_api_key=env.get("OPENAI_API_KEY") or None,
             openai_model=env.get("CAJNMNSTR_TERRA_MODEL", TERRA_MODEL).strip(),
@@ -108,13 +137,24 @@ class Settings:
         return bool(self.ai_provider and self.openai_api_key and self.openai_model)
 
     @property
-    def execution_armed(self) -> bool:
+    def broker_gate_ready(self) -> bool:
         return (
-            self.execution_enabled
-            and self.execution_confirmation == EXECUTION_CONFIRMATION
+            self.execution_confirmation == EXECUTION_CONFIRMATION
             and self.paper_mode
             and self.alpaca_api_base_url == PAPER_API_URL
             and self.credentials_present
+        )
+
+    @property
+    def entry_armed(self) -> bool:
+        return self.entry_enabled and not self.broker_lock and self.broker_gate_ready
+
+    @property
+    def position_management_armed(self) -> bool:
+        return (
+            self.position_management_enabled
+            and not self.broker_lock
+            and self.broker_gate_ready
         )
 
     def validate_static_safety(self) -> None:
@@ -147,14 +187,41 @@ class Settings:
                 "Alpaca credentials are absent; authenticated access remains unavailable"
             )
 
-    def require_execution_armed(self) -> None:
+    def require_broker_unlocked(self) -> None:
         self.validate_static_safety()
-        if not self.execution_armed:
+        if self.broker_lock:
+            raise BrokerLockedError(
+                "The explicit broker lock is active; all broker submissions are frozen"
+            )
+
+    def require_entry_armed(self) -> None:
+        self.require_broker_unlocked()
+        if not self.entry_armed:
             raise ExecutionDisabledError(
-                "Paper execution is disabled; both the enable flag and exact paper "
-                "confirmation are required, along with local paper credentials"
+                "New-entry authority is disabled; CAJNMNSTR_ENTRY_ENABLED and the exact "
+                "paper confirmation are required, along with local paper credentials"
             )
         self.require_credentials()
+
+    def require_position_management_armed(self) -> None:
+        self.require_broker_unlocked()
+        if not self.position_management_armed:
+            raise ExecutionDisabledError(
+                "Position-management authority is disabled; its explicit enable flag and "
+                "the exact paper confirmation are required, along with local paper credentials"
+            )
+        self.require_credentials()
+
+    def require_order_authority(self, position_intent: str) -> None:
+        if position_intent == "buy_to_open":
+            self.require_entry_armed()
+            return
+        if position_intent == "sell_to_close":
+            self.require_position_management_armed()
+            return
+        raise ExecutionDisabledError(
+            f"No configured authority exists for position intent: {position_intent}"
+        )
 
     def redacted(self) -> dict[str, object]:
         return {
@@ -167,8 +234,12 @@ class Settings:
             "data_entitlement": self.data_entitlement,
             "data_root": str(self.data_root),
             "journal_path": str(self.journal_path),
-            "execution_enabled": self.execution_enabled,
-            "execution_armed": self.execution_armed,
+            "entry_enabled": self.entry_enabled,
+            "entry_armed": self.entry_armed,
+            "position_management_enabled": self.position_management_enabled,
+            "position_management_armed": self.position_management_armed,
+            "broker_lock_active": self.broker_lock,
+            "legacy_execution_alias_present": self.legacy_execution_alias_present,
             "ai_provider": self.ai_provider,
             "ai_configured": self.ai_configured,
             "openai_model": self.openai_model,

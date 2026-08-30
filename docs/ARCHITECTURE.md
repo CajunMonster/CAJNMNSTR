@@ -26,7 +26,7 @@ The operator authority path has independent safety conditions:
 5. `ABSTAIN` and `BLOCK` grant no order authority;
 6. `EXIT` accepts only `sell_to_close` position management;
 7. environment is exactly `paper` and the trading URL is the paper endpoint;
-8. credentials are present locally and both explicit execution controls are armed;
+8. credentials are present locally, the exact paper confirmation is present, the applicable entry or position-management permission is armed, and the broker lock is clear;
 9. entry-critical health is available, while `sell_to_close` applies the narrower documented position-management profile;
 10. a unique `cajnmnstr-` client identity is durably authorized before submission.
 
@@ -62,9 +62,17 @@ Health authority is intentionally different for new entries and existing-positio
 - `EXIT_CRITICAL`: configuration, evidence store/durable authority, Alpaca connectivity, known broker state, broker reconciliation, executable market session, and an executable option quote for the current limit-only exit path.
 - `NONCRITICAL_FOR_EXIT`: AI provider, SPY analytical quote, daily-loss entry lock, news, and event-calendar context.
 
-Only explicitly named noncritical components may be ignored for `sell_to_close`. A missing required component, an aggregate-only non-healthy result, or an unknown non-healthy condition still fails closed. A stale option quote or closed/halted market retains `EXIT` authority as pending without recording a fill. Uncertain Alpaca or broker state requires reconciliation before any retry, preventing a blind duplicate close. Daily-loss locks block new exposure but cannot trap an existing position. Forced-EOD liquidation does not depend on Terra or Sol.
+Only explicitly named noncritical components may be ignored for `sell_to_close`. A missing required component, any aggregate-only health result, or an unknown non-healthy condition still fails closed. A stale option quote or closed/halted market retains `EXIT` authority as pending without recording a fill. Uncertain Alpaca or broker state requires reconciliation before any retry, preventing a blind duplicate close. Daily-loss locks block new exposure but cannot trap an existing position. Forced-EOD liquidation does not depend on Terra or Sol.
 
-`CAJNMNSTR_EXECUTION_ENABLED` and its exact confirmation remain the current master broker gate, so disabling them blocks both entry and exit. Splitting discretionary-entry arming from emergency position-management permission requires an explicit owner decision; this review does not silently change that control.
+Broker authority has three explicit controls:
+
+- `CAJNMNSTR_ENTRY_ENABLED` controls only `buy_to_open` entry authority and defaults to `false`.
+- `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED` controls only verified `sell_to_close` authority and defaults to `true`.
+- `CAJNMNSTR_BROKER_LOCK` is the highest-level owner freeze and blocks every submission when active.
+
+Both paths still require the exact paper confirmation, credentials, paper endpoint, sealed Passport, Referee authority, durable client-order identity, and their component-specific health profile. Position management additionally reads the broker position immediately before submission and requires one matching long contract position with at least the requested close quantity. It cannot open, average down, reverse, or over-close exposure. A disabled position-management path or failed position verification creates a persistent `CRITICAL` incident, with the emergency incident file as the journal-failure fallback.
+
+The deprecated `CAJNMNSTR_EXECUTION_ENABLED` input is accepted only as an entry-only migration alias. If it conflicts with `CAJNMNSTR_ENTRY_ENABLED`, configuration fails closed. It is not emitted as broker authority and has no position-management meaning.
 
 Broker-native option stop and stop-limit protection is deferred. It may be reconsidered only as a disaster backstop after the first live competition session and after its separate lifecycle, cancellation, replacement, and reconciliation design is proven.
 

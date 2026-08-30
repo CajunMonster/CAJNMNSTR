@@ -29,7 +29,7 @@ def test_missing_credentials_pause_broker_authority_and_persist_health(tmp_path:
     supervisor = HealthSupervisor(settings(tmp_path))
     report = supervisor.evaluate()
     assert report.state is HealthState.PAUSED
-    assert not report.execution_armed
+    assert not report.entry_armed
     assert (tmp_path / "journal" / "cajnmnstr.sqlite3").exists()
     alpaca = next(component for component in report.components if component.component == "alpaca")
     assert alpaca.state is HealthState.PAUSED
@@ -95,15 +95,17 @@ def test_incomplete_supervisor_report_does_not_overstate_exit_authority(
             "ALPACA_API_BASE_URL": PAPER_API_URL,
             "ALPACA_API_KEY": "fixture-key",
             "ALPACA_SECRET_KEY": "fixture-secret",
-            "CAJNMNSTR_EXECUTION_ENABLED": "true",
+            "CAJNMNSTR_ENTRY_ENABLED": "true",
+            "CAJNMNSTR_POSITION_MANAGEMENT_ENABLED": "true",
             "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
         },
         load_local_file=False,
     )
     report = HealthSupervisor(configured, alpaca_probe=lambda: None).evaluate()
     assert report.state is HealthState.DEGRADED
-    assert not report.execution_armed
+    assert not report.entry_armed
     assert not report.position_management_armed
+    assert not report.broker_lock_active
     payload = report.to_dict()
-    assert not payload["entry_execution_armed"]
+    assert not payload["entry_armed"]
     assert not payload["position_management_armed"]

@@ -775,8 +775,8 @@ class OperatorReviewGate:
     """Confirms replay eligibility without reserving identity or invoking a coordinator."""
 
     def __init__(self, settings: Settings, journal: Journal) -> None:
-        if settings.execution_enabled or settings.execution_armed:
-            raise ConfigurationError("Replay review requires execution disabled and unarmed")
+        if settings.entry_enabled or settings.entry_armed:
+            raise ConfigurationError("Replay review requires entry authority disabled and unarmed")
         self.settings = settings
         self.journal = journal
 
@@ -860,8 +860,10 @@ class ReplayDecisionPipeline:
         journal: Journal,
         analysis_provider: AnalysisProvider,
     ) -> None:
-        if settings.execution_enabled or settings.execution_armed:
-            raise ConfigurationError("Replay pipeline requires execution disabled and unarmed")
+        if settings.entry_enabled or settings.entry_armed:
+            raise ConfigurationError(
+                "Replay pipeline requires entry authority disabled and unarmed"
+            )
         self.settings = settings
         self.journal = journal
         self.analysis_provider = analysis_provider
@@ -895,8 +897,11 @@ class ReplayDecisionPipeline:
                 "market_set": snapshot.market_set,
                 "option_set": snapshot.option_set,
             },
-            "execution_enabled": self.settings.execution_enabled,
-            "execution_armed": self.settings.execution_armed,
+            "entry_enabled": self.settings.entry_enabled,
+            "entry_armed": self.settings.entry_armed,
+            "position_management_enabled": self.settings.position_management_enabled,
+            "position_management_armed": self.settings.position_management_armed,
+            "broker_lock_active": self.settings.broker_lock,
         }
         self.journal.create_passport(passport_id, open_payload)
         if snapshot.hard_failures or snapshot.stale_sources:

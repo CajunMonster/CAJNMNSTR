@@ -14,6 +14,10 @@ class ExecutionDisabledError(CAJNMNSTRError):
     """Raised when any order path is reached while the paper gate is closed."""
 
 
+class BrokerLockedError(ExecutionDisabledError):
+    """Raised when the explicit highest-level broker lock is active."""
+
+
 class AuthorityDeniedError(ExecutionDisabledError):
     """Raised when evidence or Referee authority does not permit execution."""
 

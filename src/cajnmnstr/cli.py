@@ -102,8 +102,11 @@ def _verify_terra(settings: Settings, path: Path) -> int:
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,
         "fixture_only": True,
-        "execution_enabled": settings.execution_enabled,
-        "execution_armed": settings.execution_armed,
+        "entry_enabled": settings.entry_enabled,
+        "entry_armed": settings.entry_armed,
+        "position_management_enabled": settings.position_management_enabled,
+        "position_management_armed": settings.position_management_armed,
+        "broker_lock_active": settings.broker_lock,
     }
     journal.append_event(
         EventType.PROPOSAL,
@@ -145,8 +148,8 @@ def _replay_cycle(settings: Settings, path: Path, *, live_terra: bool) -> int:
     ai_failures = sum(item.ai_failure_code is not None for item in results)
     safe_stop = (
         summary["broker_submission_count"] == 0
-        and not settings.execution_enabled
-        and not settings.execution_armed
+        and not settings.entry_enabled
+        and not settings.entry_armed
         and all(not item.operator_review.broker_submission_allowed for item in results)
     )
     status = "PASS" if safe_stop and ai_failures == 0 else "FAIL_CLOSED"
@@ -156,8 +159,11 @@ def _replay_cycle(settings: Settings, path: Path, *, live_terra: bool) -> int:
                 "status": status,
                 "analysis_mode": analysis_mode,
                 "fixture_id": document.get("fixture_id"),
-                "execution_enabled": settings.execution_enabled,
-                "execution_armed": settings.execution_armed,
+                "entry_enabled": settings.entry_enabled,
+                "entry_armed": settings.entry_armed,
+                "position_management_enabled": settings.position_management_enabled,
+                "position_management_armed": settings.position_management_armed,
+                "broker_lock_active": settings.broker_lock,
                 "ai_failure_count": ai_failures,
                 **summary,
             }
@@ -463,8 +469,11 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
             "data_entitlement_recorded_before_probe": settings.data_entitlement,
             "live_health": live_health.to_dict(),
             "operational_data_health_state": operational_health_state.value,
-            "execution_enabled": settings.execution_enabled,
-            "execution_armed": settings.execution_armed,
+            "entry_enabled": settings.entry_enabled,
+            "entry_armed": settings.entry_armed,
+            "position_management_enabled": settings.position_management_enabled,
+            "position_management_armed": settings.position_management_armed,
+            "broker_lock_active": settings.broker_lock,
         }
         passed = (
             settings.paper_mode
@@ -479,8 +488,9 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
             and all(selector_fields.values())
             and quote_health.state is not HealthState.PAUSED
             and option_health.state is not HealthState.PAUSED
-            and not settings.execution_enabled
-            and not settings.execution_armed
+            and not settings.entry_enabled
+            and not settings.entry_armed
+            and not settings.broker_lock
         )
 
         for component in data_health_components:
@@ -537,8 +547,11 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
             "error": str(exc),
             "paper_mode": settings.paper_mode,
             "paper_endpoint": settings.alpaca_api_base_url,
-            "execution_enabled": settings.execution_enabled,
-            "execution_armed": settings.execution_armed,
+            "entry_enabled": settings.entry_enabled,
+            "entry_armed": settings.entry_armed,
+            "position_management_enabled": settings.position_management_enabled,
+            "position_management_armed": settings.position_management_armed,
+            "broker_lock_active": settings.broker_lock,
         }
         if journal_ready:
             try:

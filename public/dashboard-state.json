@@ -5,8 +5,11 @@
   "truth_label": "MARKET CLOSED · LIVE DATA STALE · REPLAY DISPLAY",
   "updated_at": "2026-08-29T22:59:43Z",
   "controls": {
-    "execution_enabled": false,
-    "execution_armed": false,
+    "entry_enabled": false,
+    "entry_armed": false,
+    "position_management_enabled": true,
+    "position_management_armed": false,
+    "broker_lock_active": false,
     "broker_submission_allowed": false
   },
   "connections": [
@@ -143,7 +146,7 @@
   "execution": [
     {"stage": "PROPOSED", "status": "COMPLETE", "detail": "Terra replay proposal validated"},
     {"stage": "REFEREE", "status": "APPROVE", "detail": "Replay authority only"},
-    {"stage": "SUBMITTED", "status": "STOPPED", "detail": "Execution disabled and unarmed"},
+    {"stage": "SUBMITTED", "status": "STOPPED", "detail": "Entry disabled; no existing position"},
     {"stage": "FILLED", "status": "NOT STARTED", "detail": "No broker order"},
     {"stage": "EXIT", "status": "NOT STARTED", "detail": "No position"}
   ],

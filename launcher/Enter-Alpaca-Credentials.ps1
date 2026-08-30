@@ -141,16 +141,26 @@ $saveButton.Add_Click({
         }
 
         $content = [System.IO.File]::ReadAllText($envPath)
-        $executionPattern = '(?m)^[ \t]*(?:export[ \t]+)?CAJNMNSTR_EXECUTION_ENABLED[ \t]*=[ \t]*(?<value>[^\r\n]*)'
+        $entryPattern = '(?m)^[ \t]*(?:export[ \t]+)?CAJNMNSTR_ENTRY_ENABLED[ \t]*=[ \t]*(?<value>[^\r\n]*)'
+        $legacyEntryPattern = '(?m)^[ \t]*(?:export[ \t]+)?CAJNMNSTR_EXECUTION_ENABLED[ \t]*=[ \t]*(?<value>[^\r\n]*)'
         $apiPattern = '(?m)^(?<prefix>[ \t]*(?:export[ \t]+)?ALPACA_API_KEY[ \t]*=[ \t]*)[^\r\n]*'
         $secretPattern = '(?m)^(?<prefix>[ \t]*(?:export[ \t]+)?ALPACA_SECRET_KEY[ \t]*=[ \t]*)[^\r\n]*'
 
-        $executionMatches = [regex]::Matches($content, $executionPattern)
+        $entryMatches = [regex]::Matches($content, $entryPattern)
+        $legacyEntryMatches = [regex]::Matches($content, $legacyEntryPattern)
         $apiMatches = [regex]::Matches($content, $apiPattern)
         $secretMatches = [regex]::Matches($content, $secretPattern)
 
-        if ($executionMatches.Count -ne 1 -or
-            -not (Test-DisabledValue $executionMatches[0].Groups['value'].Value) -or
+        $entryDisabled = (
+            $entryMatches.Count -eq 1 -and
+            (Test-DisabledValue $entryMatches[0].Groups['value'].Value)
+        ) -or (
+            $entryMatches.Count -eq 0 -and
+            $legacyEntryMatches.Count -eq 1 -and
+            (Test-DisabledValue $legacyEntryMatches[0].Groups['value'].Value)
+        )
+
+        if (-not $entryDisabled -or
             $apiMatches.Count -ne 1 -or
             $secretMatches.Count -ne 1) {
             Set-SafeStatus 'ALPACA CREDENTIALS: ABSENT' ([System.Drawing.Color]::FromArgb(225, 95, 85))
@@ -205,7 +215,10 @@ $saveButton.Add_Click({
             'ALPACA_API_KEY',
             'ALPACA_SECRET_KEY',
             'CAJNMNSTR_EXECUTION_ENABLED',
-            'CAJNMNSTR_EXECUTION_ARMED'
+            'CAJNMNSTR_EXECUTION_ARMED',
+            'CAJNMNSTR_ENTRY_ENABLED',
+            'CAJNMNSTR_POSITION_MANAGEMENT_ENABLED',
+            'CAJNMNSTR_BROKER_LOCK'
         )) {
             $startInfo.EnvironmentVariables.Remove($name)
         }
@@ -226,8 +239,8 @@ $saveButton.Add_Click({
         $stdout = $null
 
         if ($check.alpaca_credentials_present -eq $true -and
-            $check.execution_enabled -eq $false -and
-            $check.execution_armed -eq $false) {
+            $check.entry_enabled -eq $false -and
+            $check.entry_armed -eq $false) {
             Set-SafeStatus 'ALPACA CREDENTIALS: PRESENT' ([System.Drawing.Color]::FromArgb(82, 191, 109))
         }
         else {

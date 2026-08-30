@@ -11,7 +11,8 @@ Keep credentials on this computer. Do not paste credentials into chat, screensho
 - [ ] Generate paper API credentials.
 - [ ] Copy `.env.example` to `.env.local`.
 - [ ] Open `.env.local` in a local text editor. Fill only `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`.
-- [ ] Leave `CAJNMNSTR_EXECUTION_ENABLED=false` and leave the confirmation blank.
+- [ ] Set `CAJNMNSTR_ENTRY_ENABLED=false`, `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED=true`, and `CAJNMNSTR_BROKER_LOCK=false`; remove the deprecated `CAJNMNSTR_EXECUTION_ENABLED` alias after migration.
+- [ ] Leave `CAJNMNSTR_EXECUTION_CONFIRMATION` blank until the controlled order window.
 - [ ] Set the actual stock/options feeds and `ALPACA_DATA_ENTITLEMENT` only after verification.
 - [ ] Set `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` in the owner's local environment. Do not add their values to any checked-in file.
 - [ ] Copy the single server table from `config/codex-mcp.example.toml` into the owner's local Codex `~/.codex/config.toml` (or add it through **Settings → MCP servers**). Keep its exact four-toolset allowlist.
@@ -41,15 +42,16 @@ Do this only after the owner explicitly authorizes the test while present.
 - [ ] Create and seal a test Evidence Passport, then record an APPROVE verdict and limits through the deterministic Referee.
 - [ ] Choose one SPY option contract and one limit price that cannot exceed the approved premium.
 - [ ] Generate a unique `cajnmnstr-` client order ID and record it in the Passport.
-- [ ] Set `CAJNMNSTR_EXECUTION_ENABLED=true`.
+- [ ] Set `CAJNMNSTR_ENTRY_ENABLED=true`; keep position management enabled and the broker lock clear.
 - [ ] Set `CAJNMNSTR_EXECUTION_CONFIRMATION=PAPER_ONLY_I_ACCEPT`.
-- [ ] Re-run `config-check`; confirm `execution_armed: true` only after every paper invariant passes.
+- [ ] Re-run `config-check`; confirm `entry_armed: true`, `position_management_armed: true`, and `broker_lock_active: false` only after every paper invariant passes.
 - [ ] Run `.venv\Scripts\cajnmnstr.exe health --live` and require overall `HEALTHY`; `DEGRADED` or `PAUSED` must block submission.
 - [ ] Submit exactly one paper limit order through the operator authority path, which alone may invoke the deterministic execution coordinator. Do not invoke the coordinator directly and do not use MCP.
 - [ ] Verify Alpaca returned a broker order ID and that its client order ID exactly matches the local ID.
 - [ ] Verify the authority transition, order attempt, and broker lifecycle event are present in the journal/Evidence Passport.
 - [ ] Cancel the order if it remains open. If it fills, close the paper position as explicitly approved.
 - [ ] Reconcile broker orders and positions against local IDs. Require a matched reconciliation report.
-- [ ] Immediately reset `CAJNMNSTR_EXECUTION_ENABLED=false` and clear the confirmation value.
-- [ ] Re-run `config-check` and confirm `execution_armed: false`.
+- [ ] Immediately reset `CAJNMNSTR_ENTRY_ENABLED=false` after the entry is accepted. Do not clear the confirmation while a position or unresolved broker order exists; position-management authority must remain available.
+- [ ] After the account is flat and reconciliation is matched, clear the confirmation value.
+- [ ] Re-run `config-check` and confirm `entry_armed: false`; verify the displayed position-management and broker-lock states match the intended flat-account posture.
 - [ ] Preserve the Passport, lifecycle events, final broker state, and reconciliation record for the demo audit trail.

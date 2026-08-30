@@ -15,8 +15,11 @@ type DashboardState = {
   truth_label: string;
   updated_at: string;
   controls: {
-    execution_enabled: boolean;
-    execution_armed: boolean;
+    entry_enabled: boolean;
+    entry_armed: boolean;
+    position_management_enabled: boolean;
+    position_management_armed: boolean;
+    broker_lock_active: boolean;
     broker_submission_allowed: boolean;
   };
   connections: Array<{
@@ -322,12 +325,48 @@ function AccountPanel({ state }: { state: DashboardState }) {
   );
 }
 
-function ExecutionPanel({ state }: { state: DashboardState }) {
-  const controls = state.controls.execution_enabled
-    ? state.controls.execution_armed ? "ENABLED / ARMED" : "ENABLED / UNARMED"
-    : "DISABLED / UNARMED";
+function AuthorityRack({ state }: { state: DashboardState }) {
+  const authorities = [
+    {
+      label: "ENTRY",
+      value: state.controls.entry_enabled ? "ENABLED" : "DISABLED",
+      detail: state.controls.entry_armed ? "PAPER GATE ARMED" : "PAPER GATE UNARMED",
+      tone: state.controls.entry_enabled ? "enabled" : "disabled",
+    },
+    {
+      label: "POSITION MANAGEMENT",
+      value: state.controls.position_management_enabled ? "ENABLED" : "DISABLED",
+      detail: state.controls.position_management_armed
+        ? "VERIFIED EXITS MAY PROCEED"
+        : "BROKER GATE UNARMED",
+      tone: state.controls.position_management_enabled ? "enabled" : "disabled",
+    },
+    {
+      label: "BROKER LOCK",
+      value: state.controls.broker_lock_active ? "ACTIVE" : "CLEAR",
+      detail: state.controls.broker_lock_active
+        ? "ALL SUBMISSIONS FROZEN"
+        : "COMPONENT HEALTH STILL APPLIES",
+      tone: state.controls.broker_lock_active ? "active" : "clear",
+    },
+  ];
   return (
-    <MetalPanel kicker="BROKER LIFECYCLE" title="EXECUTION STATUS" status={controls} className="lower-panel execution-panel">
+    <div className="authority-rack" aria-label="Broker authority controls">
+      {authorities.map((authority) => (
+        <div className={`authority-cell authority-${authority.tone}`} key={authority.label}>
+          <span>{authority.label}</span>
+          <strong>{authority.value}</strong>
+          <small>{authority.detail}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExecutionPanel({ state }: { state: DashboardState }) {
+  return (
+    <MetalPanel kicker="BROKER LIFECYCLE" title="EXECUTION STATUS" status={state.controls.broker_lock_active ? "BROKER LOCK ACTIVE" : "BROKER LOCK CLEAR"} className="lower-panel execution-panel">
+      <AuthorityRack state={state} />
       <div className="execution-track">
         {state.execution.map((item, index) => (
           <div className={`execution-step ${item.status.toLowerCase().replace(" ", "-")}`} key={item.stage}>
@@ -351,9 +390,10 @@ function ActivityPanel({ state }: { state: DashboardState }) {
   );
 }
 
-function HealthPanel({ state }: { state: DashboardState }) {
+function HealthPanel({ state, showAuthority = false }: { state: DashboardState; showAuthority?: boolean }) {
   return (
     <MetalPanel kicker="FAIL-LOUD MONITORING" title="SYSTEM HEALTH" status={state.operational_state} className="lower-panel health-panel">
+      {showAuthority && <AuthorityRack state={state} />}
       <div className="health-list">
         {state.systems.map((item) => (
           <div key={item.id}><span className={`health-dot state-${item.state.toLowerCase()}`} /><p><strong>{item.label}</strong><small>{item.detail}</small></p><b>{item.state}</b></div>
@@ -391,7 +431,7 @@ function JournalView({ state }: { state: DashboardState }) {
 }
 
 function SystemView({ state }: { state: DashboardState }) {
-  return <section className="detail-view"><HealthPanel state={state} /></section>;
+  return <section className="detail-view"><HealthPanel state={state} showAuthority /></section>;
 }
 
 export default function Home() {
@@ -441,7 +481,7 @@ export default function Home() {
           {navItems.map(([view, label, number]) => (
             <button type="button" key={view} className={activeView === view ? "active" : ""} aria-pressed={activeView === view} onClick={() => setActiveView(view)}><span>{number}</span><strong>{label}</strong></button>
           ))}
-          <div className="mode-lock"><span className={`status-lamp ${state.controls.execution_armed ? "verified" : "paused"}`} />PAPER · EXECUTION {state.controls.execution_enabled ? "ENABLED" : "DISABLED"}</div>
+          <div className="mode-lock"><span className={`status-lamp ${state.controls.broker_lock_active ? "blocked" : "paused"}`} />ENTRY {state.controls.entry_enabled ? "ENABLED" : "DISABLED"} · PM {state.controls.position_management_enabled ? "ENABLED" : "DISABLED"} · LOCK {state.controls.broker_lock_active ? "ACTIVE" : "CLEAR"}</div>
         </nav>
         <footer className="terminal-footer"><span>EVIDENCE PASSPORT</span><i>◆</i><span>DETERMINISTIC REFEREE</span><i>◆</i><strong>STOP BEFORE BROKER</strong><i>◆</i><span>{state.account.open_order_count} OPEN ORDERS</span></footer>
       </section>
