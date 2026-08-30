@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "mode": "REPLAY",
+  "operational_state": "PAUSED",
+  "truth_label": "MARKET CLOSED · LIVE DATA STALE · REPLAY DISPLAY",
+  "updated_at": "2026-08-29T22:59:43Z",
+  "controls": {
+    "execution_enabled": false,
+    "execution_armed": false,
+    "broker_submission_allowed": false
+  },
+  "connections": [
+    {
+      "id": "alpaca",
+      "label": "ALPACA",
+      "value": "PAPER AUTH",
+      "state": "verified",
+      "detail": "Authenticated read-only checkpoint"
+    },
+    {
+      "id": "sip",
+      "label": "SIP MARKET DATA",
+      "value": "STALE",
+      "state": "paused",
+      "detail": "Authorized; market closed"
+    },
+    {
+      "id": "opra",
+      "label": "OPRA OPTIONS",
+      "value": "STALE",
+      "state": "paused",
+      "detail": "Authorized; market closed"
+    },
+    {
+      "id": "terra",
+      "label": "TERRA AI",
+      "value": "REPLAY OK",
+      "state": "verified",
+      "detail": "Nine-case replay verified"
+    },
+    {
+      "id": "referee",
+      "label": "REFEREE",
+      "value": "LOCKED",
+      "state": "verified",
+      "detail": "Deterministic authority intact"
+    }
+  ],
+  "account": {
+    "equity": 100000,
+    "buying_power": 400000,
+    "options_buying_power": 100000,
+    "day_pl": null,
+    "open_pl": 0,
+    "position_count": 0,
+    "open_order_count": 0,
+    "as_of": "2026-08-29T22:59:43Z",
+    "source": "Last authenticated read-only verification"
+  },
+  "market": {
+    "symbol": "SPY",
+    "price": 504,
+    "previous_close": 499,
+    "change": 5,
+    "change_percent": 1.002,
+    "last_update": "2026-08-24T14:30:00Z",
+    "session": "MARKET CLOSED",
+    "data_state": "REPLAY",
+    "feed": "CHECKED-IN 5-MINUTE BARS",
+    "candles": [
+      {"t": "13:30", "o": 500, "h": 500.2, "l": 499.9, "c": 500.1},
+      {"t": "13:35", "o": 500.1, "h": 500.4, "l": 500, "c": 500.3},
+      {"t": "13:40", "o": 500.3, "h": 500.6, "l": 500.2, "c": 500.5},
+      {"t": "13:45", "o": 500.5, "h": 500.8, "l": 500.4, "c": 500.7},
+      {"t": "13:50", "o": 500.7, "h": 501, "l": 500.6, "c": 500.9},
+      {"t": "13:55", "o": 500.9, "h": 501.2, "l": 500.8, "c": 501.1},
+      {"t": "14:00", "o": 501.1, "h": 501.7, "l": 501, "c": 501.6},
+      {"t": "14:05", "o": 501.6, "h": 502.1, "l": 501.5, "c": 502},
+      {"t": "14:10", "o": 502, "h": 502.5, "l": 501.9, "c": 502.4},
+      {"t": "14:15", "o": 502.4, "h": 502.9, "l": 502.3, "c": 502.8},
+      {"t": "14:20", "o": 502.8, "h": 503.3, "l": 502.7, "c": 503.2},
+      {"t": "14:25", "o": 503.2, "h": 503.7, "l": 503.1, "c": 503.6},
+      {"t": "14:30", "o": 503.6, "h": 504.1, "l": 503.5, "c": 504}
+    ]
+  },
+  "regime": {
+    "state": "BULLISH",
+    "support": 6,
+    "opposition": 0,
+    "session": "REPLAY · MARKET CLOSED",
+    "detail": "Returns, VWAP, opening range, and day location aligned"
+  },
+  "options": {
+    "feed": "OPRA",
+    "status": "AUTHORIZED · LIVE STALE",
+    "chain_health": "VALID REPLAY SNAPSHOT",
+    "atm_iv": 20.85,
+    "skew": null,
+    "skew_reason": "Not valid: nearest call and put use different strikes",
+    "last_update": "2026-08-24T14:29:55Z",
+    "surface": [
+      {"label": "504 CALL IV", "value": 20.5},
+      {"label": "500 CALL IV", "value": 20.2},
+      {"label": "500 PUT IV", "value": 21.2},
+      {"label": "496 PUT IV", "value": 21.5}
+    ]
+  },
+  "proposal": {
+    "direction": "LONG_CALL",
+    "time_horizon": "INTRADAY",
+    "thesis": "Positive 5-, 15-, and 60-minute returns align with price above VWAP and the opening range.",
+    "counterargument": "A sharp reversal back through VWAP would negate the directional alignment.",
+    "uncertainty": "MEDIUM",
+    "evidence_count": 4,
+    "invalidation": "Price loses VWAP and the opening range."
+  },
+  "decision": {
+    "verdict": "APPROVE",
+    "state": "READY_FOR_OPERATOR_REVIEW",
+    "symbol": "SPY260904C00504000",
+    "contract_label": "SPY 504 CALL",
+    "expiration": "2026-09-04",
+    "dte": 11,
+    "quantity_authority": 2,
+    "limit_price": 4.05,
+    "authority_max_debit": 850,
+    "risk_amount": 810,
+    "risk_percent": 0.81,
+    "uncertainty": "MEDIUM",
+    "reasons": [
+      "Six directional states align",
+      "Zero opposing states",
+      "OPRA-shaped quote validated",
+      "Replay stops before broker submission"
+    ]
+  },
+  "passport": {
+    "id": "replay-bullish-approve",
+    "fixture_id": "spy-pre-monday-2026-08-24",
+    "sealed": true,
+    "source": "Checked-in replay fixture"
+  },
+  "execution": [
+    {"stage": "PROPOSED", "status": "COMPLETE", "detail": "Terra replay proposal validated"},
+    {"stage": "REFEREE", "status": "APPROVE", "detail": "Replay authority only"},
+    {"stage": "SUBMITTED", "status": "STOPPED", "detail": "Execution disabled and unarmed"},
+    {"stage": "FILLED", "status": "NOT STARTED", "detail": "No broker order"},
+    {"stage": "EXIT", "status": "NOT STARTED", "detail": "No position"}
+  ],
+  "activity": [
+    {"time": "14:30:05", "kind": "STOP", "text": "Operator review ready · broker submission false", "mode": "REPLAY"},
+    {"time": "14:30:04", "kind": "PASSPORT", "text": "Complete Evidence Passport sealed", "mode": "REPLAY"},
+    {"time": "14:30:03", "kind": "REFEREE", "text": "APPROVE · six support · zero opposition", "mode": "REPLAY"},
+    {"time": "14:30:02", "kind": "TERRA", "text": "LONG_CALL · medium uncertainty · citations valid", "mode": "REPLAY"},
+    {"time": "14:30:01", "kind": "MARKET", "text": "SPY features calculated deterministically", "mode": "REPLAY"}
+  ],
+  "systems": [
+    {"id": "sip", "label": "SIP", "state": "PAUSED", "detail": "Authorized · closed-market stale"},
+    {"id": "opra", "label": "OPRA", "state": "PAUSED", "detail": "Authorized · closed-market stale"},
+    {"id": "alpaca", "label": "ALPACA", "state": "VERIFIED", "detail": "Paper account authenticated read-only"},
+    {"id": "terra", "label": "TERRA", "state": "VERIFIED", "detail": "Nine replay calls passed strict schema"},
+    {"id": "evidence", "label": "EVIDENCE STORE", "state": "HEALTHY", "detail": "Passports and transitions persisted"}
+  ]
+}

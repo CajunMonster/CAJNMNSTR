@@ -1,36 +1,105 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useEffect, useState, type ReactNode } from "react";
+import initialDashboardState from "../public/dashboard-state.json";
 
 type ViewName = "dashboard" | "evidence" | "journal" | "system";
+type StatusTone = "verified" | "paused" | "blocked" | "unknown";
 
-const statusItems = [
-  ["CAJNMNSTR", "PAUSED", "paused"],
-  ["ALPACA", "PAPER AUTH", "ok"],
-  ["MARKET DATA", "SIP / OPRA STALE", "paused"],
-  ["AI", "TERRA REPLAY", "ok"],
-  ["REFEREE", "LOCKED", "ok"],
-];
-
-const instruments = [
-  { symbol: "XAU", name: "GOLD", price: "$2,386.71", change: "+0.78%", source: "GOLD-API", bars: [24, 27, 29, 26, 34, 38, 35, 45, 49, 54, 52, 64] },
-  { symbol: "XAG", name: "SILVER", price: "$28.97", change: "+0.91%", source: "GOLD-API", bars: [18, 22, 19, 27, 29, 31, 28, 38, 42, 39, 47, 53] },
-  { symbol: "BTC", name: "BITCOIN", price: "$67,842.50", change: "+1.87%", source: "ALPACA", bars: [28, 21, 31, 27, 36, 43, 39, 48, 45, 58, 55, 68] },
-];
-
-const spyBars = [36, 44, 39, 54, 49, 63, 57, 51, 66, 61, 73, 69, 77, 70, 82, 76, 85, 79];
-
-const refereeChecks = [
-  ["PAPER_MODE", "PASS", "Paper endpoint confirmed"],
-  ["SYMBOL_ALLOWED", "PASS", "SPY is inside the approved universe"],
-  ["DATA_FRESHNESS", "PASS", "Replay timestamps are internally fresh"],
-  ["FEED_AUTHORITY", "PASS", "SIP and OPRA entitlements verified"],
-  ["POSITION_LIMIT", "PASS", "Dedicated paper account remains empty"],
-  ["PREMIUM_CAP", "PASS", "$4.05 ask is inside the locked $4.25 limit"],
-  ["DAILY_LOSS", "PASS", "$0 of $1,000 lockout used"],
-  ["BROKER_BOUNDARY", "PASS", "Replay stops before identity reservation or submission"],
-];
+type Candle = { t: string; o: number; h: number; l: number; c: number };
+type DashboardState = {
+  schema_version: number;
+  mode: "REPLAY" | "LIVE" | "PAPER";
+  operational_state: "HEALTHY" | "DEGRADED" | "PAUSED";
+  truth_label: string;
+  updated_at: string;
+  controls: {
+    execution_enabled: boolean;
+    execution_armed: boolean;
+    broker_submission_allowed: boolean;
+  };
+  connections: Array<{
+    id: string;
+    label: string;
+    value: string;
+    state: StatusTone;
+    detail: string;
+  }>;
+  account: {
+    equity: number | null;
+    buying_power: number | null;
+    options_buying_power: number | null;
+    day_pl: number | null;
+    open_pl: number | null;
+    position_count: number;
+    open_order_count: number;
+    as_of: string;
+    source: string;
+  };
+  market: {
+    symbol: string;
+    price: number | null;
+    previous_close: number | null;
+    change: number | null;
+    change_percent: number | null;
+    last_update: string;
+    session: string;
+    data_state: string;
+    feed: string;
+    candles: Candle[];
+  };
+  regime: {
+    state: "BULLISH" | "NEUTRAL" | "BEARISH";
+    support: number;
+    opposition: number;
+    session: string;
+    detail: string;
+  };
+  options: {
+    feed: string;
+    status: string;
+    chain_health: string;
+    atm_iv: number | null;
+    skew: number | null;
+    skew_reason: string;
+    last_update: string;
+    surface: Array<{ label: string; value: number }>;
+  };
+  proposal: {
+    direction: "LONG_CALL" | "LONG_PUT" | "NO_TRADE";
+    time_horizon: string;
+    thesis: string;
+    counterargument: string;
+    uncertainty: string;
+    evidence_count: number;
+    invalidation: string;
+  };
+  decision: {
+    verdict: "APPROVE" | "REDUCE" | "ABSTAIN" | "BLOCK";
+    state: string;
+    symbol: string | null;
+    contract_label: string | null;
+    expiration: string | null;
+    dte: number | null;
+    quantity_authority: number | null;
+    limit_price: number | null;
+    authority_max_debit: number | null;
+    risk_amount: number | null;
+    risk_percent: number | null;
+    uncertainty: string;
+    reasons: string[];
+  };
+  passport: {
+    id: string;
+    fixture_id: string;
+    sealed: boolean;
+    source: string;
+  };
+  execution: Array<{ stage: string; status: string; detail: string }>;
+  activity: Array<{ time: string; kind: string; text: string; mode: string }>;
+  systems: Array<{ id: string; label: string; state: string; detail: string }>;
+};
 
 const navItems: Array<[ViewName, string, string]> = [
   ["dashboard", "COMMAND", "01"],
@@ -39,233 +108,342 @@ const navItems: Array<[ViewName, string, string]> = [
   ["system", "SYSTEM", "04"],
 ];
 
-function InstrumentCard({ instrument }: { instrument: typeof instruments[number] }) {
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function money(value: number | null): string {
+  return value === null ? "—" : currency.format(value);
+}
+
+function signedMoney(value: number | null): string {
+  if (value === null) return "—";
+  return `${value > 0 ? "+" : ""}${currency.format(value)}`;
+}
+
+function timestamp(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "America/Chicago",
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
+function FrameHardware() {
   return (
-    <article className="instrument">
-      <div>
-        <p>{instrument.name} <span>/ {instrument.symbol}</span></p>
-        <strong>{instrument.price}</strong>
-        <small>{instrument.change}</small>
-      </div>
-      <div className="spark-bars" aria-hidden="true">
-        {instrument.bars.map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}
-      </div>
-      <span className="freshness">{instrument.source} · DEMO · 12s</span>
+    <>
+      <i className="rivet rivet-nw" aria-hidden="true" />
+      <i className="rivet rivet-ne" aria-hidden="true" />
+      <i className="rivet rivet-sw" aria-hidden="true" />
+      <i className="rivet rivet-se" aria-hidden="true" />
+    </>
+  );
+}
+
+function MetalPanel({ kicker, title, status, className = "", children }: {
+  kicker: string;
+  title: string;
+  status?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <article className={`metal-panel ${className}`}>
+      <FrameHardware />
+      <header className="panel-titlebar">
+        <div><span>{kicker}</span><h2>{title}</h2></div>
+        {status && <b>{status}</b>}
+      </header>
+      {children}
     </article>
   );
 }
 
-function Pipeline() {
+function StatusCluster({ state }: { state: DashboardState }) {
   return (
-    <div className="decision-flow" aria-label="Decision pipeline">
-      {[["01", "ANALYZE"], ["02", "EVIDENCE"], ["03", "RISK"], ["04", "VERDICT"], ["05", "REVIEW"]].map(([number, label], index) => (
-        <div className={index === 4 ? "flow-step active" : "flow-step"} key={label}>
-          <span>{number}</span><strong>{label}</strong>
+    <div className="status-cluster" aria-label="Verified runtime status">
+      {state.connections.map((item) => (
+        <div className="status-node" key={item.id} title={item.detail}>
+          <span className={`status-lamp ${item.state}`} aria-hidden="true" />
+          <div><small>{item.label}</small><strong>{item.value}</strong></div>
         </div>
       ))}
     </div>
   );
 }
 
-function DashboardView({ openEvidence }: { openEvidence: () => void }) {
-  return (
-    <>
-      <div className="market-ribbon" aria-label="Informational instruments">
-        {instruments.map((instrument) => <InstrumentCard instrument={instrument} key={instrument.symbol} />)}
-      </div>
-      <Pipeline />
-      <div className="primary-grid">
-        <article className="panel spy-panel">
-          <div className="panel-heading">
-            <div><span>PRIMARY MARKET</span><h2>SPY</h2></div>
-            <div className="quote"><strong>$534.26</strong><span>+$2.11 · +0.40%</span></div>
-          </div>
-          <div className="chart-field" aria-label="Representative SPY intraday chart">
-            <div className="axis-labels"><span>536</span><span>534</span><span>532</span><span>530</span></div>
-            <div className="chart-bars" aria-hidden="true">
-              {spyBars.map((height, index) => <i key={index} className={index % 4 === 0 ? "down" : "up"} style={{ height: `${height}%` }} />)}
-            </div>
-            <div className="chart-glow" />
-          </div>
-          <div className="market-facts">
-            <div><span>DATA FEED</span><strong>SIP · DEMO</strong></div>
-            <div><span>SESSION</span><strong>REGULAR</strong></div>
-            <div><span>REGIME</span><strong>LOW VOL</strong></div>
-          </div>
-        </article>
+function CandlestickChart({ candles }: { candles: Candle[] }) {
+  if (candles.length === 0) {
+    return <div className="candle-chart chart-unavailable">NO PRICE SERIES AVAILABLE</div>;
+  }
+  const highest = Math.max(...candles.map((candle) => candle.h));
+  const lowest = Math.min(...candles.map((candle) => candle.l));
+  const range = highest - lowest || 1;
+  const y = (value: number) => ((highest - value) / range) * 100;
 
-        <article className="panel case-panel">
-          <div className="panel-heading">
-            <div><span>VERIFIED REPLAY</span><h2>BULLISH APPROVE</h2></div>
-            <span className="case-state">REPLAY ONLY</span>
-          </div>
-          <div className="case-body">
-            <section className="case-copy">
-              <p className="section-label">AI PROPOSAL</p>
-              <h3>BULLISH CALL</h3>
-              <p className="thesis">Positive 5-, 15-, and 60-minute returns align above VWAP and the opening range.</p>
-              <p className="section-label">STRONGEST COUNTERARGUMENT</p>
-              <p className="counter">A sharp reversal through VWAP and the opening range would invalidate the directional alignment.</p>
-              <div className="contract-line"><span>DETERMINISTIC REPLAY CANDIDATE</span><strong>SPY · 504 CALL · 11 DTE · 2 MAX</strong></div>
-              <div className="uncertainty"><span>UNCERTAINTY</span><strong>MEDIUM</strong></div>
-              <button className="evidence-button" type="button" onClick={openEvidence}>INSPECT EVIDENCE PASSPORT <span>→</span></button>
-            </section>
-            <section className="verdict-card">
-              <p>REFEREE VERDICT</p>
-              <div className="verdict-seal" aria-hidden="true">✓</div>
-              <h3>APPROVE</h3>
-              <span>REPLAY AUTHORITY ONLY</span>
-              <ul>
-                <li>Paper mode confirmed</li>
-                <li>Six directional states align</li>
-                <li>OPRA-shaped quote validated</li>
-                <li>Broker submission prohibited</li>
-              </ul>
-            </section>
-          </div>
-        </article>
+  return (
+    <div className="candle-chart" aria-label="SPY replay candlestick chart">
+      <div className="chart-grid" aria-hidden="true" />
+      <div className="candles">
+        {candles.map((candle) => {
+          const rising = candle.c >= candle.o;
+          const wickTop = y(candle.h);
+          const wickHeight = Math.max(2, y(candle.l) - wickTop);
+          const bodyTop = Math.min(y(candle.o), y(candle.c));
+          const bodyHeight = Math.max(3, Math.abs(y(candle.o) - y(candle.c)));
+          return (
+            <div className={`candle ${rising ? "up" : "down"}`} key={candle.t} title={`${candle.t} O ${candle.o} H ${candle.h} L ${candle.l} C ${candle.c}`}>
+              <i style={{ top: `${wickTop}%`, height: `${wickHeight}%` }} />
+              <b style={{ top: `${bodyTop}%`, height: `${bodyHeight}%` }} />
+            </div>
+          );
+        })}
       </div>
-      <div className="summary-grid">
-        <article className="summary-card">
-          <p>BROKER REALITY</p><strong>NOT SUBMITTED</strong><span>Execution remains disabled in this prototype.</span>
-        </article>
-        <article className="summary-card">
-          <p>PAPER PERFORMANCE</p><strong className="positive">$0.00 · 0.00%</strong><span>No broker positions or fills.</span>
-        </article>
-        <article className="summary-card">
-          <p>REPLAY AUTHORITY</p><strong>READY FOR REVIEW</strong><span>Sealed Passport; broker submission remains prohibited.</span>
-        </article>
-      </div>
-    </>
+      <div className="chart-axis"><span>{highest.toFixed(2)}</span><span>{lowest.toFixed(2)}</span></div>
+      <div className="chart-times"><span>{candles.at(0)?.t}</span><span>{candles.at(-1)?.t}</span></div>
+    </div>
   );
 }
 
-function EvidenceView() {
+function SpyPanel({ state }: { state: DashboardState }) {
+  const changeTone = (state.market.change ?? 0) >= 0 ? "positive" : "negative";
   return (
-    <section className="view-panel" aria-labelledby="evidence-title">
-      <div className="view-heading">
-        <div><p className="eyebrow">BULLISH APPROVE · REPLAY PASSPORT</p><h2 id="evidence-title">Evidence, not intuition.</h2></div>
-        <span className="passport-id">CHECKED-IN FIXTURE</span>
+    <MetalPanel kicker="PRIMARY UNDERLYING" title="SPY" status={`${state.market.data_state} DATA`} className="market-panel spy-market">
+      <div className="spy-quote-row">
+        <div><span>{state.market.data_state} PRICE</span><strong>{money(state.market.price)}</strong></div>
+        <p className={changeTone}>{signedMoney(state.market.change)} <b>{state.market.change_percent === null ? "—" : `${state.market.change_percent > 0 ? "+" : ""}${state.market.change_percent.toFixed(2)}%`}</b></p>
       </div>
-      <div className="evidence-layout">
-        <article className="evidence-brief">
-          <p className="section-label">THE CASE</p>
-          <h3>LONG CALL · MEDIUM UNCERTAINTY</h3>
-          <p>Terra cited aligned returns, VWAP, and opening-range evidence. Deterministic code then selected an eligible 11-DTE call and stopped at operator review.</p>
-          <dl>
-            <div><dt>MODEL</dt><dd>GPT-5.6-TERRA · STRICT STRUCTURED OUTPUT</dd></div>
-            <div><dt>HORIZON</dt><dd>INTRADAY</dd></div>
-            <div><dt>INVALIDATION</dt><dd>LOSS OF VWAP AND OPENING RANGE</dd></div>
-            <div><dt>PROVENANCE</dt><dd>CHECKED-IN BARS · OPRA-SHAPED FIXTURE</dd></div>
-          </dl>
-        </article>
-        <article className="referee-ledger">
-          <p className="section-label">DETERMINISTIC REFEREE</p>
-          {refereeChecks.map(([code, result, detail]) => (
-            <div className="ledger-row" key={code}>
-              <div><strong>{code}</strong><span>{detail}</span></div>
-              <b className={result === "BLOCK" ? "blocked" : result === "REDUCE" ? "reduced" : "passed"}>{result}</b>
-            </div>
-          ))}
-        </article>
-      </div>
-      <div className="provenance-strip">
-        <div><span>MARKET AS OF</span><strong>2026-08-24 REPLAY</strong></div>
-        <div><span>REPLAY QUOTE AGE</span><strong>5 SECONDS</strong></div>
-        <div><span>POLICY</span><strong>SPY-REPLAY-V0.1</strong></div>
-        <div><span>LIVE AUTHORITY</span><strong className="amber">NONE</strong></div>
-      </div>
-    </section>
+      <CandlestickChart candles={state.market.candles} />
+      <footer className="data-footer"><span>{state.market.feed}</span><span>UPDATED {timestamp(state.market.last_update)}</span></footer>
+    </MetalPanel>
   );
 }
 
-function JournalView() {
-  const entries = [
-    ["14:30:05", "STOP", "Operator review ready · broker submission false"],
-    ["14:30:04", "EVIDENCE", "Complete replay Passport sealed"],
-    ["14:30:03", "REFEREE", "APPROVE · six supporting states · zero opposition"],
-    ["14:30:02", "AI", "Terra LONG_CALL · medium uncertainty · citations valid"],
-    ["14:30:01", "MARKET", "Checked-in SPY features calculated deterministically"],
-  ];
+function RegimePanel({ state }: { state: DashboardState }) {
+  const active = state.regime.state.toLowerCase();
   return (
-    <section className="view-panel" aria-labelledby="journal-title">
-      <div className="view-heading"><div><p className="eyebrow">AUDIT TRAIL</p><h2 id="journal-title">Every step leaves a mark.</h2></div><span className="passport-id">LOCAL DEMO</span></div>
-      <div className="journal-list">
-        {entries.map(([time, kind, text], index) => (
-          <article className="journal-entry" key={time}>
-            <span>{time}</span><b>{kind}</b><p>{text}</p><i>{String(index + 1).padStart(2, "0")}</i>
-          </article>
+    <MetalPanel kicker="DETERMINISTIC CONTEXT" title="MARKET REGIME" status={state.regime.session} className="market-panel regime-panel">
+      <div className="regime-stage">
+        <div className={`beast bull ${active === "bullish" ? "active" : ""}`}>
+          <div className="beast-mark bull-mark" aria-hidden="true"><i /><b /><span /></div><small>BULL</small>
+        </div>
+        <div className="regime-dial"><span>{state.regime.state}</span><strong>{state.regime.support}</strong><small>SUPPORT</small></div>
+        <div className={`beast bear ${active === "bearish" ? "active" : ""}`}>
+          <div className="beast-mark bear-mark" aria-hidden="true"><i /><b /><span /></div><small>BEAR</small>
+        </div>
+      </div>
+      <p className="panel-copy">{state.regime.detail}</p>
+      <footer className="data-footer"><span>{state.market.session}</span><span>{state.regime.opposition} OPPOSING STATES</span></footer>
+    </MetalPanel>
+  );
+}
+
+function OptionsPanel({ state }: { state: DashboardState }) {
+  const maximum = Math.max(...state.options.surface.map((item) => item.value), 1);
+  return (
+    <MetalPanel kicker="OPTIONS INTELLIGENCE" title="OPTIONS / OPRA" status={state.options.status} className="market-panel options-panel">
+      <div className="options-metrics">
+        <div><span>CHAIN HEALTH</span><strong>{state.options.chain_health}</strong></div>
+        <div><span>ATM IV</span><strong>{state.options.atm_iv === null ? "—" : `${state.options.atm_iv.toFixed(2)}%`}</strong></div>
+        <div><span>SKEW</span><strong>{state.options.skew === null ? "N/A" : `${state.options.skew.toFixed(2)}%`}</strong></div>
+      </div>
+      <div className="iv-surface" aria-label="Replay option implied volatility comparison">
+        {state.options.surface.map((item) => (
+          <div key={item.label}><i style={{ height: `${Math.max(18, (item.value / maximum) * 100)}%` }} /><span>{item.label}</span></div>
         ))}
       </div>
-      <div className="shadow-note"><strong>SHADOW EVALUATION</strong><span>No hypothetical fill has been created. A blocked decision would be marked separately from broker P&amp;L.</span></div>
+      <footer className="data-footer"><span>{state.options.skew_reason}</span><span>UPDATED {timestamp(state.options.last_update)}</span></footer>
+    </MetalPanel>
+  );
+}
+
+function ProposalPanel({ state, openEvidence }: { state: DashboardState; openEvidence: () => void }) {
+  return (
+    <MetalPanel kicker="ANALYST LAYER" title="TERRA PROPOSAL" status={`${state.mode} · ${state.proposal.time_horizon}`} className="decision-panel proposal-panel">
+      <div className="direction-lockup"><span>DIRECTION</span><strong>{state.proposal.direction.replace("_", " ")}</strong><b>{state.proposal.uncertainty} UNCERTAINTY</b></div>
+      <section className="argument"><span>THESIS</span><p>{state.proposal.thesis}</p></section>
+      <section className="argument counterargument"><span>STRONGEST COUNTERARGUMENT</span><p>{state.proposal.counterargument}</p></section>
+      <button className="passport-button" type="button" onClick={openEvidence}><span>OPEN EVIDENCE PASSPORT</span><b>{state.proposal.evidence_count} CITATIONS</b></button>
+    </MetalPanel>
+  );
+}
+
+function DecisionPanel({ state }: { state: DashboardState }) {
+  return (
+    <MetalPanel kicker="DETERMINISTIC SELECTION" title="CURRENT DECISION" status={state.decision.state.replaceAll("_", " ")} className="decision-panel current-decision">
+      <div className="contract-hero"><span>SELECTED SPY OPTION</span><strong>{state.decision.contract_label ?? "NO CONTRACT"}</strong><small>{state.decision.symbol ?? "Selection unavailable"}</small></div>
+      <div className="decision-metrics">
+        <div><span>EXPIRATION</span><strong>{state.decision.expiration ?? "—"}</strong></div>
+        <div><span>DTE</span><strong>{state.decision.dte ?? "—"}</strong></div>
+        <div><span>QUANTITY AUTHORITY</span><strong>{state.decision.quantity_authority ?? "—"}</strong></div>
+        <div><span>LIMIT PRICE</span><strong>{money(state.decision.limit_price)}</strong></div>
+        <div><span>MAX DEBIT AUTHORITY</span><strong>{money(state.decision.authority_max_debit)}</strong></div>
+        <div><span>PROPOSED RISK</span><strong>{money(state.decision.risk_amount)} · {state.decision.risk_percent === null ? "—" : `${state.decision.risk_percent.toFixed(2)}%`}</strong></div>
+      </div>
+      <div className="decision-warning"><span>UNCERTAINTY</span><strong>{state.decision.uncertainty}</strong><p>Replay candidate only. No client-order identity was reserved.</p></div>
+    </MetalPanel>
+  );
+}
+
+function RefereePanel({ state }: { state: DashboardState }) {
+  const verdictMark = {
+    APPROVE: "✓",
+    REDUCE: "↓",
+    ABSTAIN: "•",
+    BLOCK: "×",
+  }[state.decision.verdict];
+  return (
+    <MetalPanel kicker="AUTHORITY LAYER" title="REFEREE VERDICT" status="DETERMINISTIC" className={`decision-panel referee-panel verdict-${state.decision.verdict.toLowerCase()}`}>
+      <div className="verdict-emblem"><span aria-hidden="true">{verdictMark}</span><strong>{state.decision.verdict}</strong><small>{state.mode} AUTHORITY ONLY</small></div>
+      <ul className="reason-list">{state.decision.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+      <div className="broker-stop"><span>BROKER SUBMISSION</span><strong>{state.controls.broker_submission_allowed ? "ALLOWED" : "PROHIBITED"}</strong></div>
+    </MetalPanel>
+  );
+}
+
+function AccountPanel({ state }: { state: DashboardState }) {
+  return (
+    <MetalPanel kicker="DEDICATED JUDGING ACCOUNT" title="PAPER ACCOUNT" status="LAST VERIFIED" className="lower-panel account-panel">
+      <div className="account-metrics">
+        <div><span>EQUITY</span><strong>{money(state.account.equity)}</strong></div>
+        <div><span>BUYING POWER</span><strong>{money(state.account.buying_power)}</strong></div>
+        <div><span>DAY P&amp;L</span><strong>{signedMoney(state.account.day_pl)}</strong><small>Not returned by checkpoint</small></div>
+        <div><span>OPEN P&amp;L</span><strong>{signedMoney(state.account.open_pl)}</strong><small>{state.account.position_count} positions</small></div>
+      </div>
+      <footer className="data-footer"><span>{state.account.source}</span><span>{timestamp(state.account.as_of)}</span></footer>
+    </MetalPanel>
+  );
+}
+
+function ExecutionPanel({ state }: { state: DashboardState }) {
+  const controls = state.controls.execution_enabled
+    ? state.controls.execution_armed ? "ENABLED / ARMED" : "ENABLED / UNARMED"
+    : "DISABLED / UNARMED";
+  return (
+    <MetalPanel kicker="BROKER LIFECYCLE" title="EXECUTION STATUS" status={controls} className="lower-panel execution-panel">
+      <div className="execution-track">
+        {state.execution.map((item, index) => (
+          <div className={`execution-step ${item.status.toLowerCase().replace(" ", "-")}`} key={item.stage}>
+            <i>{String(index + 1).padStart(2, "0")}</i><span>{item.stage}</span><strong>{item.status}</strong><small>{item.detail}</small>
+          </div>
+        ))}
+      </div>
+    </MetalPanel>
+  );
+}
+
+function ActivityPanel({ state }: { state: DashboardState }) {
+  return (
+    <MetalPanel kicker="DURABLE JOURNAL" title="RECENT ACTIVITY" status={`${state.mode} EVENTS`} className="lower-panel activity-panel">
+      <div className="activity-list">
+        {state.activity.slice(0, 5).map((item) => (
+          <div key={`${item.time}-${item.kind}`}><time>{item.time}</time><b>{item.kind}</b><p>{item.text}</p><span>{item.mode}</span></div>
+        ))}
+      </div>
+    </MetalPanel>
+  );
+}
+
+function HealthPanel({ state }: { state: DashboardState }) {
+  return (
+    <MetalPanel kicker="FAIL-LOUD MONITORING" title="SYSTEM HEALTH" status={state.operational_state} className="lower-panel health-panel">
+      <div className="health-list">
+        {state.systems.map((item) => (
+          <div key={item.id}><span className={`health-dot state-${item.state.toLowerCase()}`} /><p><strong>{item.label}</strong><small>{item.detail}</small></p><b>{item.state}</b></div>
+        ))}
+      </div>
+    </MetalPanel>
+  );
+}
+
+function CommandView({ state, openEvidence }: { state: DashboardState; openEvidence: () => void }) {
+  return (
+    <div className="command-view">
+      <section className="market-deck" aria-label="SPY market overview"><SpyPanel state={state} /><RegimePanel state={state} /><OptionsPanel state={state} /></section>
+      <section className="decision-deck" aria-label="Current SPY decision"><ProposalPanel state={state} openEvidence={openEvidence} /><DecisionPanel state={state} /><RefereePanel state={state} /></section>
+      <section className="lower-deck" aria-label="Account and operational status"><AccountPanel state={state} /><ExecutionPanel state={state} /><ActivityPanel state={state} /><HealthPanel state={state} /></section>
+    </div>
+  );
+}
+
+function EvidenceView({ state }: { state: DashboardState }) {
+  return (
+    <section className="detail-view">
+      <MetalPanel kicker={`${state.mode} EVIDENCE PASSPORT`} title={state.passport.id} status={state.passport.sealed ? "SEALED" : "OPEN"} className="evidence-overview">
+        <div className="evidence-columns">
+          <section><span>THESIS</span><p>{state.proposal.thesis}</p><span>COUNTERARGUMENT</span><p>{state.proposal.counterargument}</p><span>STRUCTURED INVALIDATION</span><p>{state.proposal.invalidation}</p></section>
+          <section className="passport-facts"><div><span>FIXTURE</span><strong>{state.passport.fixture_id}</strong></div><div><span>DIRECTION</span><strong>{state.proposal.direction}</strong></div><div><span>UNCERTAINTY</span><strong>{state.proposal.uncertainty}</strong></div><div><span>VERDICT</span><strong>{state.decision.verdict}</strong></div><div><span>AUTHORITY</span><strong>{state.decision.state}</strong></div><div><span>BROKER</span><strong>NOT SUBMITTED</strong></div></section>
+        </div>
+      </MetalPanel>
     </section>
   );
 }
 
-function SystemView() {
-  return (
-    <section className="view-panel" aria-labelledby="system-title">
-      <div className="view-heading"><div><p className="eyebrow">LOCAL CONTROL ROOM</p><h2 id="system-title">Safe by construction.</h2></div><span className="danger-state">PAUSED · EXECUTION DISABLED</span></div>
-      <div className="system-grid">
-        <article><span>HEALTH STATE</span><strong>PAUSED</strong><p>Authenticated data exceeds the closed-market freshness policy.</p></article>
-        <article><span>ALPACA ADAPTER</span><strong>AUTHENTICATED</strong><p>Dedicated paper account reads succeeded; execution remains disabled.</p></article>
-        <article><span>DATA ENTITLEMENT</span><strong>SIP + OPRA</strong><p>Algo Trader Plus feeds are authorized; closed-market timestamps still enforce PAUSED.</p></article>
-        <article><span>MCP SURFACE</span><strong>READ ONLY</strong><p>Assets, stock data, options data, and news only. Trading tools are excluded.</p></article>
-        <article><span>TERRA ADAPTER</span><strong>9-CASE VERIFIED</strong><p>Live replay run: 5 approve, 0 reduce, 2 abstain, 2 block; no tools or broker interface.</p></article>
-        <article><span>ORDER GATE</span><strong>DOUBLE LOCKED</strong><p>A paper-only flag and exact confirmation are both required.</p></article>
-        <article><span>EVIDENCE STORE</span><strong>HEALTHY</strong><p>Connection and data-health events persisted without credentials or account identifiers.</p></article>
-        <article><span>INCIDENT POLICY</span><strong>FAIL LOUD</strong><p>Critical failures attach protective action and force PAUSED authority.</p></article>
-      </div>
-    </section>
-  );
+function JournalView({ state }: { state: DashboardState }) {
+  return <section className="detail-view"><ActivityPanel state={state} /></section>;
+}
+
+function SystemView({ state }: { state: DashboardState }) {
+  return <section className="detail-view"><HealthPanel state={state} /></section>;
 }
 
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewName>("dashboard");
+  const [state, setState] = useState<DashboardState>(initialDashboardState as DashboardState);
   const [clock, setClock] = useState("--:--:--");
 
   useEffect(() => {
-    const updateClock = () => setClock(new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Chicago" }).format(new Date()));
-    updateClock();
-    const timer = window.setInterval(updateClock, 1000);
-    return () => window.clearInterval(timer);
+    const refreshClock = () => setClock(new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Chicago" }).format(new Date()));
+    refreshClock();
+    const clockTimer = window.setInterval(refreshClock, 1000);
+    const refreshState = async () => {
+      try {
+        const response = await fetch(`/dashboard-state.json?t=${Date.now()}`, { cache: "no-store" });
+        if (response.ok) setState(await response.json() as DashboardState);
+      } catch {
+        // Preserve the last verified state; its source and timestamp remain visible.
+      }
+    };
+    void refreshState();
+    const stateTimer = window.setInterval(refreshState, 30000);
+    return () => { window.clearInterval(clockTimer); window.clearInterval(stateTimer); };
   }, []);
 
   return (
     <main className="page-shell">
-      <section className="terminal-frame" aria-label="CAJNMNSTR trading agent dashboard">
+      <section className={`terminal-frame mode-${state.mode.toLowerCase()}`} aria-label="CAJNMNSTR SPY options agent dashboard">
+        <div className="frame-corner corner-nw" aria-hidden="true">♠</div><div className="frame-corner corner-ne" aria-hidden="true">⚙</div><div className="frame-corner corner-sw" aria-hidden="true">⚙</div><div className="frame-corner corner-se" aria-hidden="true">♠</div>
         <header className="masthead">
           <div className="brand-lockup">
-            <div className="brand-mark" aria-hidden="true"><Image src="/cajnmstr-icon.png" alt="" width={76} height={76} priority /></div>
-            <div><p className="eyebrow">AUTONOMOUS EVIDENCE ENGINE</p><h1>CAJNMNSTR</h1><p className="tagline">AI MAKES THE CASE. <strong>EVIDENCE DECIDES.</strong></p></div>
+            <div className="brand-mark"><Image src="/cajnmstr-icon.png" alt="Skull in a top hat inside a steel spade emblem" width={108} height={108} priority /></div>
+            <div className="brand-type"><h1>CAJNMNSTR</h1><p>SPY OPTIONS AGENT</p></div>
           </div>
-          <div className="system-strip" aria-label="System status">
-            {statusItems.map(([label, value, state]) => <div className="status-chip" key={label}><span className={`status-light ${state}`} aria-hidden="true" /><span>{label}</span><strong>{value}</strong></div>)}
-          </div>
-          <div className="equity-block"><span>VERIFIED PAPER EQUITY</span><strong>$100,000.00</strong><small>{clock} CT · READ ONLY</small></div>
+          <StatusCluster state={state} />
+          <div className="account-head"><span>PAPER EQUITY · LAST VERIFIED</span><strong>{money(state.account.equity)}</strong><div><small>BUYING POWER</small><b>{money(state.account.buying_power)}</b></div><time>{timestamp(state.account.as_of)}</time></div>
         </header>
 
-        <nav className="nav-rail" aria-label="Dashboard sections">
+        <div className="truth-banner" role="status"><strong>{state.operational_state}</strong><span>{state.truth_label}</span><b>{clock} CT</b></div>
+
+        {activeView === "dashboard" && <CommandView state={state} openEvidence={() => setActiveView("evidence")} />}
+        {activeView === "evidence" && <EvidenceView state={state} />}
+        {activeView === "journal" && <JournalView state={state} />}
+        {activeView === "system" && <SystemView state={state} />}
+
+        <nav className="bottom-nav" aria-label="Dashboard sections">
+          <span className="nav-engraving" aria-hidden="true">♠</span>
           {navItems.map(([view, label, number]) => (
-            <button type="button" key={view} className={activeView === view ? "active" : ""} aria-pressed={activeView === view} onClick={() => setActiveView(view)}>
-              <span>{number}</span>{label}
-            </button>
+            <button type="button" key={view} className={activeView === view ? "active" : ""} aria-pressed={activeView === view} onClick={() => setActiveView(view)}><span>{number}</span><strong>{label}</strong></button>
           ))}
-          <div className="mode-lock"><span aria-hidden="true">◆</span> PAPER MODE · LOCKED</div>
+          <div className="mode-lock"><span className={`status-lamp ${state.controls.execution_armed ? "verified" : "paused"}`} />PAPER · EXECUTION {state.controls.execution_enabled ? "ENABLED" : "DISABLED"}</div>
         </nav>
-
-        <div className="health-banner" role="status">
-          <strong>PAUSED</strong><span>Paper authentication, SIP, OPRA, and the nine-case Terra replay pipeline are verified. Live market data remains closed-market stale; the replay stops before broker submission and execution is disabled.</span>
-        </div>
-
-        {activeView === "dashboard" && <DashboardView openEvidence={() => setActiveView("evidence")} />}
-        {activeView === "evidence" && <EvidenceView />}
-        {activeView === "journal" && <JournalView />}
-        {activeView === "system" && <SystemView />}
-
-        <footer className="terminal-footer">
-          <span>AUTHENTICATED READ ONLY · REPRESENTATIVE DATA</span><strong>EXECUTION DISABLED</strong><span>AI ARGUES · CODE DECIDES · BROKER VERIFIES</span>
-        </footer>
+        <footer className="terminal-footer"><span>EVIDENCE PASSPORT</span><i>◆</i><span>DETERMINISTIC REFEREE</span><i>◆</i><strong>STOP BEFORE BROKER</strong><i>◆</i><span>{state.account.open_order_count} OPEN ORDERS</span></footer>
       </section>
     </main>
   );
