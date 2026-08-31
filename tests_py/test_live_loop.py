@@ -1,12 +1,17 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 
-from cajnmnstr.config import PAPER_API_URL, Settings
+from cajnmnstr.config import EXECUTION_CONFIRMATION, PAPER_API_URL, Settings
 from cajnmnstr.journal import Journal
-from cajnmnstr.live_loop import READ_ONLY_LOOP_CONFIRMATION, ContinuousDecisionLoop
+from cajnmnstr.live_loop import (
+    POSITION_MANAGEMENT_LOOP_CONFIRMATION,
+    READ_ONLY_LOOP_CONFIRMATION,
+    ContinuousDecisionLoop,
+)
 from cajnmnstr.models import EventType, MarketClockSnapshot, StockBarSnapshot
 
 DECISION_AT = datetime(2026, 8, 31, 15, 0, tzinfo=UTC)
@@ -27,6 +32,7 @@ def settings(tmp_path) -> Settings:
             "CAJNMNSTR_ENTRY_ENABLED": "false",
             "CAJNMNSTR_POSITION_MANAGEMENT_ENABLED": "true",
             "CAJNMNSTR_BROKER_LOCK": "false",
+            "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
             "CAJNMNSTR_AI_PROVIDER": "openai",
             "OPENAI_API_KEY": "fixture-openai-key",
         },
@@ -92,6 +98,16 @@ class FakeRunner:
         )
 
 
+class FakePositionManager:
+    def __init__(self, states):
+        self.states = list(states)
+        self.calls = []
+
+    def run_cycle(self, item):
+        self.calls.append(item)
+        return self.states[len(self.calls) - 1]
+
+
 def test_loop_continues_after_non_actionable_decision_on_new_epoch(tmp_path) -> None:
     app = settings(tmp_path)
     runner = FakeRunner(
@@ -112,7 +128,7 @@ def test_loop_continues_after_non_actionable_decision_on_new_epoch(tmp_path) -> 
     assert result.cycles == 2
     assert result.canonical_decisions == 2
     assert result.terminal_state == "BOUNDED_RUN_COMPLETE"
-    assert result.broker_submission_allowed is False
+    assert result.entry_submission_allowed is False
     assert len(runner.calls) == 2
 
 
@@ -150,7 +166,7 @@ def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> No
 
     assert result.terminal_state == "OPERATOR_REVIEW_PENDING"
     assert result.canonical_decisions == 1
-    assert result.broker_submission_allowed is False
+    assert result.entry_submission_allowed is False
 
 
 def test_verified_position_requires_deterministic_management_handler(tmp_path) -> None:
@@ -186,3 +202,54 @@ def test_loop_requires_explicit_read_only_confirmation(tmp_path) -> None:
             runner,
             sleep=lambda _: None,
         ).run(confirmation="", cadence_seconds=30, max_cycles=1)
+
+
+def test_position_management_runs_independently_then_entry_analysis_resumes_flat(
+    tmp_path,
+) -> None:
+    app = settings(tmp_path)
+    with_position = collection(DECISION_AT, positions=(object(),))
+    flat = collection(DECISION_AT + timedelta(minutes=5))
+    runner = FakeRunner([with_position, flat], ["NOT_ELIGIBLE"])
+    manager = FakePositionManager(["POSITION_MONITORING", "FLAT"])
+
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        position_manager=manager,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=POSITION_MANAGEMENT_LOOP_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=2,
+    )
+
+    assert len(manager.calls) == 2
+    assert len(runner.calls) == 1
+    assert result.canonical_decisions == 1
+    assert result.position_management_mode is True
+    assert result.entry_submission_allowed is False
+    assert result.position_management_submission_possible is True
+
+
+def test_position_management_loop_fails_before_collection_when_unarmed(tmp_path) -> None:
+    app = replace(settings(tmp_path), execution_confirmation=None)
+    runner = FakeRunner([collection(DECISION_AT)], ["NOT_ELIGIBLE"])
+    manager = FakePositionManager(["FLAT"])
+
+    with pytest.raises(ValueError, match="requires explicitly armed"):
+        ContinuousDecisionLoop(
+            app,
+            Journal(app.journal_path),
+            runner,
+            position_manager=manager,
+            sleep=lambda _: None,
+        ).run(
+            confirmation=POSITION_MANAGEMENT_LOOP_CONFIRMATION,
+            cadence_seconds=30,
+            max_cycles=1,
+        )
+
+    assert runner.collector.index == 0
+    assert manager.calls == []

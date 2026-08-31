@@ -29,8 +29,13 @@ from .live_snapshot import (
     LiveDecisionRunner,
     outcome_summary,
 )
-from .models import EventType, HealthState
+from .models import EventType, HealthState, InvalidationRule, PositionManagementPlan
 from .option_chain import parse_option_chain_payload
+from .position_management import (
+    POSITION_PLAN_CONFIRMATION,
+    DeterministicPositionManager,
+)
+from .services import OperatorAuthorityPath, PaperExecutionCoordinator
 
 
 def _json(value: Any) -> str:
@@ -212,20 +217,44 @@ def _live_loop(
     max_cycles: int | None,
     dashboard_path: Path,
     health_path: Path,
+    manage_position: bool,
 ) -> int:
-    """Run a read-only regular-session monitor with no execution dependency."""
+    """Run monitoring; optional broker writes are restricted to deterministic exits."""
     if not settings.ai_configured:
         raise ValueError("Terra must be configured for the continuous decision loop")
+    journal = Journal(settings.journal_path)
+    adapter = AlpacaAdapter(settings)
     runner = LiveDecisionRunner(
         settings,
-        Journal(settings.journal_path),
-        AlpacaAdapter(settings),
+        journal,
+        adapter,
         OpenAIResponsesAdapter(settings),
     )
+    position_manager = None
+    if manage_position:
+        coordinator = PaperExecutionCoordinator(
+            settings,
+            journal,
+            adapter,
+            adapter,
+            lambda: HealthState.PAUSED,
+        )
+        authority = OperatorAuthorityPath(
+            settings,
+            journal,
+            coordinator,
+            lambda: HealthState.PAUSED,
+        )
+        position_manager = DeterministicPositionManager(
+            settings,
+            journal,
+            authority,
+        )
     result = ContinuousDecisionLoop(
         settings,
-        Journal(settings.journal_path),
+        journal,
         runner,
+        position_manager=position_manager,
     ).run(
         confirmation=confirmation,
         cadence_seconds=cadence_seconds,
@@ -234,6 +263,86 @@ def _live_loop(
         health_path=health_path,
     )
     print(_json(result.to_dict()))
+    return 0
+
+
+def _register_position_plan(
+    settings: Settings,
+    *,
+    confirmation: str,
+    plan_id: str,
+    entry_passport_id: str,
+    symbol: str,
+    maximum_quantity: int,
+    stop_loss_fraction: Decimal,
+    profit_target_fraction: Decimal | None,
+    invalidation_feature: str,
+    invalidation_comparison: str,
+    invalidation_threshold: Decimal,
+    time_stop_at: datetime,
+    forced_eod_at: datetime,
+    strategy_version: str,
+    rationale: str,
+) -> int:
+    if confirmation != POSITION_PLAN_CONFIRMATION:
+        raise ValueError(
+            f"Position-plan registration requires --confirm {POSITION_PLAN_CONFIRMATION}"
+        )
+    if settings.entry_enabled or settings.entry_armed:
+        raise ValueError("Prepare the durable exit plan while new-entry authority is disabled")
+    journal = Journal(settings.journal_path)
+    journal.initialize()
+    plan = PositionManagementPlan(
+        plan_id=plan_id,
+        entry_passport_id=entry_passport_id,
+        symbol=symbol,
+        maximum_quantity=maximum_quantity,
+        stop_loss_fraction=stop_loss_fraction,
+        profit_target_fraction=profit_target_fraction,
+        invalidation=InvalidationRule(
+            feature_name=invalidation_feature,
+            comparison=invalidation_comparison,
+            threshold=invalidation_threshold,
+        ),
+        time_stop_at=time_stop_at,
+        forced_eod_at=forced_eod_at,
+        strategy_version=strategy_version,
+        rationale=rationale,
+    )
+    if not journal.register_position_plan(plan):
+        raise ValueError("Position plan ID, entry Passport, or active symbol already exists")
+    journal.append_event(
+        EventType.AUTHORITY_TRANSITION,
+        source="owner_position_plan",
+        passport_id=entry_passport_id,
+        payload={
+            "plan_id": plan_id,
+            "symbol": symbol,
+            "maximum_quantity": maximum_quantity,
+            "strategy_version": strategy_version,
+            "rationale": rationale,
+            "owner_approved": True,
+            "threshold_defaults_used": False,
+            "entry_enabled": False,
+            "broker_submission_allowed": False,
+        },
+        protective_action="Keep entry disabled until the complete plan is reviewed.",
+    )
+    print(
+        _json(
+            {
+                "status": "REGISTERED",
+                "plan_id": plan_id,
+                "entry_passport_id": entry_passport_id,
+                "symbol": symbol,
+                "strategy_version": strategy_version,
+                "owner_approved": True,
+                "threshold_defaults_used": False,
+                "entry_enabled": False,
+                "broker_submission_allowed": False,
+            }
+        )
+    )
     return 0
 
 
@@ -703,7 +812,7 @@ def build_parser() -> argparse.ArgumentParser:
         "live-loop",
         help=(
             "Continuously monitor PAPER health and evaluate once per completed "
-            "five-minute evidence epoch; never submit"
+            "five-minute evidence epoch; entry submission is always disabled"
         ),
     )
     live_loop.add_argument("--confirm", required=True)
@@ -723,6 +832,40 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("public/health.json"),
     )
+    live_loop.add_argument(
+        "--manage-position",
+        action="store_true",
+        help=(
+            "Attach deterministic sell-to-close management. This can submit PAPER exits "
+            "only when separately armed and explicitly confirmed."
+        ),
+    )
+
+    plan = subparsers.add_parser(
+        "register-position-plan",
+        help=(
+            "Persist explicit owner-approved exit thresholds for a sealed entry Passport; "
+            "does not contact Alpaca"
+        ),
+    )
+    plan.add_argument("--confirm", required=True)
+    plan.add_argument("--plan-id", required=True)
+    plan.add_argument("--entry-passport-id", required=True)
+    plan.add_argument("--symbol", required=True)
+    plan.add_argument("--maximum-quantity", type=int, required=True)
+    plan.add_argument("--stop-loss-fraction", type=Decimal, required=True)
+    plan.add_argument("--profit-target-fraction", type=Decimal)
+    plan.add_argument("--invalidation-feature", required=True)
+    plan.add_argument(
+        "--invalidation-comparison",
+        choices=("lt", "lte", "gt", "gte"),
+        required=True,
+    )
+    plan.add_argument("--invalidation-threshold", type=Decimal, required=True)
+    plan.add_argument("--time-stop-at", type=datetime.fromisoformat, required=True)
+    plan.add_argument("--forced-eod-at", type=datetime.fromisoformat, required=True)
+    plan.add_argument("--strategy-version", required=True)
+    plan.add_argument("--rationale", required=True)
 
     mcp = subparsers.add_parser("mcp-config-check", help="Validate the read-only MCP example")
     mcp.add_argument(
@@ -760,6 +903,25 @@ def main(argv: list[str] | None = None) -> int:
             max_cycles=args.max_cycles,
             dashboard_path=args.dashboard_path,
             health_path=args.health_path,
+            manage_position=args.manage_position,
+        )
+    if args.command == "register-position-plan":
+        return _register_position_plan(
+            settings,
+            confirmation=args.confirm,
+            plan_id=args.plan_id,
+            entry_passport_id=args.entry_passport_id,
+            symbol=args.symbol,
+            maximum_quantity=args.maximum_quantity,
+            stop_loss_fraction=args.stop_loss_fraction,
+            profit_target_fraction=args.profit_target_fraction,
+            invalidation_feature=args.invalidation_feature,
+            invalidation_comparison=args.invalidation_comparison,
+            invalidation_threshold=args.invalidation_threshold,
+            time_stop_at=args.time_stop_at,
+            forced_eod_at=args.forced_eod_at,
+            strategy_version=args.strategy_version,
+            rationale=args.rationale,
         )
     if args.command == "mcp-config-check":
         return _mcp_config_check(args.path)

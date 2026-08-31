@@ -15,6 +15,7 @@ from .models import EventType
 
 NEW_YORK = ZoneInfo("America/New_York")
 READ_ONLY_LOOP_CONFIRMATION = "PAPER_READ_ONLY_LOOP"
+POSITION_MANAGEMENT_LOOP_CONFIRMATION = "PAPER_POSITION_MANAGEMENT_LOOP"
 DEFAULT_MONITOR_CADENCE_SECONDS = 60
 MINIMUM_MONITOR_CADENCE_SECONDS = 30
 
@@ -47,7 +48,9 @@ class ContinuousLoopResult:
     terminal_state: str
     last_epoch: str | None
     last_passport_id: str | None
-    broker_submission_allowed: bool = False
+    entry_submission_allowed: bool = False
+    position_management_mode: bool = False
+    position_management_submission_possible: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -95,12 +98,21 @@ class ContinuousDecisionLoop:
         health_path: Path | None = None,
     ) -> ContinuousLoopResult:
         self.settings.require_credentials()
-        if confirmation != READ_ONLY_LOOP_CONFIRMATION:
+        expected_confirmation = (
+            READ_ONLY_LOOP_CONFIRMATION
+            if self.position_manager is None
+            else POSITION_MANAGEMENT_LOOP_CONFIRMATION
+        )
+        if confirmation != expected_confirmation:
             raise ValueError(
-                f"Continuous monitoring requires --confirm {READ_ONLY_LOOP_CONFIRMATION}"
+                f"Continuous monitoring requires --confirm {expected_confirmation}"
             )
         if self.settings.entry_enabled or self.settings.entry_armed:
             raise ValueError("Read-only continuous monitoring requires entry authority disabled")
+        if self.position_manager is not None and not self.settings.position_management_armed:
+            raise ValueError(
+                "Position-management loop requires explicitly armed PAPER position authority"
+            )
         if cadence_seconds < MINIMUM_MONITOR_CADENCE_SECONDS:
             raise ValueError(
                 f"Monitoring cadence must be at least {MINIMUM_MONITOR_CADENCE_SECONDS} seconds"
@@ -125,6 +137,11 @@ class ContinuousDecisionLoop:
                 epoch = _decision_epoch(collection)
                 last_epoch = epoch
                 state = "MONITORING"
+                management_state = (
+                    None
+                    if self.position_manager is None
+                    else self.position_manager.run_cycle(collection)
+                )
 
                 if collection.positions:
                     if not self.settings.position_management_enabled:
@@ -157,7 +174,9 @@ class ContinuousDecisionLoop:
                             ),
                         )
                     else:
-                        state = self.position_manager.run_cycle(collection)
+                        state = str(management_state)
+                elif management_state not in {None, "FLAT"}:
+                    state = str(management_state)
                 elif collection.open_orders or not collection.reconciliation.matched:
                     state = "BROKER_RECONCILIATION_REQUIRED"
                 elif collection.snapshot.hard_failures or collection.snapshot.stale_sources:
@@ -194,36 +213,39 @@ class ContinuousDecisionLoop:
                     if state == "READY_FOR_OPERATOR_REVIEW":
                         terminal_state = "OPERATOR_REVIEW_PENDING"
 
+                warning_states = {
+                    "BROKER_RECONCILIATION_REQUIRED",
+                    "NON_ACTIONABLE_EVIDENCE",
+                    "POSITION_MANAGEMENT_DISABLED",
+                    "POSITION_MANAGEMENT_HANDLER_REQUIRED",
+                    "POSITION_MONITORING_DEGRADED",
+                    "POSITION_PLAN_MISSING",
+                    "BROKER_POSITION_MISMATCH",
+                    "EXIT_PENDING_OPTION_QUOTE",
+                    "EXIT_PENDING_MARKET_SESSION",
+                    "EXIT_PENDING_RECONCILIATION",
+                    "SUBMIT_UNKNOWN_RECONCILIATION_REQUIRED",
+                    "EXIT_SUBMISSION_FAILED_RECONCILIATION_REQUIRED",
+                }
                 self.journal.append_event(
                     EventType.CONNECTION,
                     source="continuous_live_loop",
-                    severity=(
-                        "WARNING"
-                        if state
-                        in {
-                            "BROKER_RECONCILIATION_REQUIRED",
-                            "NON_ACTIONABLE_EVIDENCE",
-                            "POSITION_MANAGEMENT_DISABLED",
-                            "POSITION_MANAGEMENT_HANDLER_REQUIRED",
-                        }
-                        else "INFO"
-                    ),
+                    severity="WARNING" if state in warning_states else "INFO",
                     payload={
                         "cycle": cycles,
                         "decision_epoch": epoch,
                         "state": state,
                         "entry_enabled": False,
-                        "broker_submission_allowed": False,
+                        "entry_submission_allowed": False,
+                        "position_management_mode": self.position_manager is not None,
+                        "position_management_submission_possible": (
+                            self.position_manager is not None
+                            and self.settings.position_management_armed
+                        ),
                     },
                     protective_action=(
                         None
-                        if state
-                        not in {
-                            "BROKER_RECONCILIATION_REQUIRED",
-                            "NON_ACTIONABLE_EVIDENCE",
-                            "POSITION_MANAGEMENT_DISABLED",
-                            "POSITION_MANAGEMENT_HANDLER_REQUIRED",
-                        }
+                        if state not in warning_states
                         else "Keep new entries blocked and preserve broker state."
                     ),
                 )
@@ -236,7 +258,7 @@ class ContinuousDecisionLoop:
                 }:
                     terminal_state = state
                     break
-                if _after_regular_session(collection):
+                if not collection.positions and _after_regular_session(collection):
                     terminal_state = "REGULAR_SESSION_COMPLETE"
                     break
             except Exception as exc:
@@ -250,7 +272,7 @@ class ContinuousDecisionLoop:
                         "error_type": type(exc).__name__,
                         "error": str(exc),
                         "occurred_at": datetime.now(UTC).isoformat(),
-                        "broker_submission_allowed": False,
+                        "entry_submission_allowed": False,
                     },
                     protective_action=(
                         "Treat broker/data state as uncertain; do not submit and reconcile on "
@@ -271,4 +293,9 @@ class ContinuousDecisionLoop:
             terminal_state=terminal_state,
             last_epoch=last_epoch,
             last_passport_id=last_passport_id,
+            position_management_mode=self.position_manager is not None,
+            position_management_submission_possible=(
+                self.position_manager is not None
+                and self.settings.position_management_armed
+            ),
         )

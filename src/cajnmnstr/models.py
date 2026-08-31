@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
+from zoneinfo import ZoneInfo
+
+NEW_YORK = ZoneInfo("America/New_York")
 
 
 class HealthState(StrEnum):
@@ -38,6 +41,81 @@ class AuthorityGrant(StrEnum):
     ENTRY_FULL = "ENTRY_FULL"
     ENTRY_REDUCED = "ENTRY_REDUCED"
     POSITION_MANAGEMENT = "POSITION_MANAGEMENT"
+
+
+class ExitReason(StrEnum):
+    THESIS_INVALIDATION = "THESIS_INVALIDATION"
+    RISK_STOP = "RISK_STOP"
+    PROFIT_TARGET = "PROFIT_TARGET"
+    TIME_STOP = "TIME_STOP"
+    FORCED_EOD = "FORCED_EOD"
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationRule:
+    """Owner-approved deterministic feature condition; never parsed from AI prose."""
+
+    feature_name: str
+    comparison: str
+    threshold: Decimal
+
+    def __post_init__(self) -> None:
+        if not self.feature_name.strip():
+            raise ValueError("Invalidation feature name is required")
+        if self.comparison not in {"lt", "lte", "gt", "gte"}:
+            raise ValueError("Invalidation comparison must be lt, lte, gt, or gte")
+        if not self.threshold.is_finite():
+            raise ValueError("Invalidation threshold must be finite")
+
+
+@dataclass(frozen=True, slots=True)
+class PositionManagementPlan:
+    """Immutable per-entry plan; all numerical values require explicit owner approval."""
+
+    plan_id: str
+    entry_passport_id: str
+    symbol: str
+    maximum_quantity: int
+    stop_loss_fraction: Decimal
+    profit_target_fraction: Decimal | None
+    invalidation: InvalidationRule
+    time_stop_at: datetime
+    forced_eod_at: datetime
+    strategy_version: str
+    rationale: str
+
+    def __post_init__(self) -> None:
+        if not self.plan_id.startswith("cajnmnstr-plan-"):
+            raise ValueError("Position plan ID must use the cajnmnstr-plan- namespace")
+        if not self.entry_passport_id.strip():
+            raise ValueError("Entry Passport ID is required")
+        if not re.fullmatch(r"SPY\d{6}[CP]\d{8}", self.symbol):
+            raise ValueError("Position management accepts only OCC-formatted SPY options")
+        if self.maximum_quantity <= 0:
+            raise ValueError("Position plan quantity must be positive")
+        if (
+            not self.stop_loss_fraction.is_finite()
+            or self.stop_loss_fraction <= 0
+            or self.stop_loss_fraction >= 1
+        ):
+            raise ValueError("Stop-loss fraction must be finite and between zero and one")
+        if self.profit_target_fraction is not None and (
+            not self.profit_target_fraction.is_finite()
+            or self.profit_target_fraction <= 0
+        ):
+            raise ValueError("Profit-target fraction must be positive when supplied")
+        if self.time_stop_at.tzinfo is None or self.forced_eod_at.tzinfo is None:
+            raise ValueError("Time-stop and forced-EOD timestamps require timezones")
+        time_stop_local = self.time_stop_at.astimezone(NEW_YORK)
+        forced_eod_local = self.forced_eod_at.astimezone(NEW_YORK)
+        if time_stop_local.date() != forced_eod_local.date():
+            raise ValueError("Time-stop and forced-EOD timestamps must be for one session")
+        if self.time_stop_at > self.forced_eod_at:
+            raise ValueError("Time stop cannot occur after forced EOD")
+        if not time(9, 30) <= forced_eod_local.time() < time(16, 0):
+            raise ValueError("Forced EOD must be inside the regular session and before close")
+        if not self.strategy_version.strip() or not self.rationale.strip():
+            raise ValueError("Strategy version and owner rationale are required")
 
 
 @dataclass(frozen=True, slots=True)

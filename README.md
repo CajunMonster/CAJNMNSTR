@@ -53,6 +53,9 @@ and reviewed before a new deployment.
   distinguishes hard and soft Referee gates, and selects only eligible SPY options.
 - **Live Evidence Snapshot** normalizes authenticated PAPER account, SIP bars/quotes, and OPRA
   option snapshots through that same decision contract, then stops before broker submission.
+- **Deterministic Position Manager** requires an immutable owner-approved plan before entry,
+  evaluates stop, target, structured thesis invalidation, time stop, and forced-EOD conditions,
+  and can produce only a reconciled `sell_to_close` lifecycle.
 - **Model-neutral AI port** supports provider adapters without giving any provider broker access.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the authority boundary,
@@ -122,8 +125,7 @@ normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and sel
 Passport, updates the dashboard, and stops at operator review. `verify-terra` and
 `replay-cycle --live-terra` send only checked-in replay evidence to OpenAI.
 
-The prepared continuous read-only loop is deliberately not enabled by configuration. After owner
-review, it can be started explicitly with:
+The continuous loop has two explicit modes. Read-only monitoring can be started with:
 
 ```powershell
 .venv\Scripts\cajnmnstr.exe live-loop --confirm PAPER_READ_ONLY_LOOP
@@ -132,9 +134,21 @@ review, it can be started explicitly with:
 It monitors once per minute, invokes Terra at most once for each new completed five-minute bar,
 continues after `NO_TRADE` / `ABSTAIN` / `BLOCK`, and pauses at
 `READY_FOR_OPERATOR_REVIEW`. It has no execution-coordinator dependency and always reports
-`broker_submission_allowed=false`. A verified open position requires the separately approved
-deterministic position-management handler; absence of that handler raises a persistent critical
-incident and blocks new-entry evaluation.
+`broker_submission_allowed=false`.
+
+The position-management mode is separately armed and confirmed:
+
+```powershell
+.venv\Scripts\cajnmnstr.exe live-loop --manage-position --confirm PAPER_POSITION_MANAGEMENT_LOOP
+```
+
+This mode still rejects enabled new-entry authority. It may submit only a deterministic PAPER
+`sell_to_close` for a verified existing position whose immutable exit plan was registered before
+entry. Use `cajnmnstr register-position-plan --help` to review the required owner-supplied fields.
+There are no default stop, target, invalidation, time-stop, or forced-EOD values. Registration
+requires a sealed `APPROVE`/`REDUCE` Passport, explicit confirmation, strategy version, and
+rationale. Submission is not closure: the lifecycle remains pending until reconciliation proves
+broker quantity is zero.
 
 The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
@@ -148,6 +162,10 @@ video script, pitch outline, and unposted social drafts are collected in
 [docs/DEMO_AND_SUBMISSION_PLAN.md](docs/DEMO_AND_SUBMISSION_PLAN.md). All demo material must preserve
 the visible `PAPER`, `REPLAY`, `PAUSED`, freshness, and broker-submission labels shown by the source
 snapshot.
+
+The sanitized first-session evidence record is
+[docs/LIVE_EVIDENCE_2026-08-31.md](docs/LIVE_EVIDENCE_2026-08-31.md). It records one freshness
+safe-stop and one corrected actionable abstention; it does not claim that a trade occurred.
 
 ## License
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import EvidenceStoreError
-from .models import EventType, RefereeResult
+from .models import EventType, InvalidationRule, PositionManagementPlan, RefereeResult
 
 SCHEMA_STATEMENTS = (
     """
@@ -103,12 +103,31 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (decision_id) REFERENCES ai_decisions(decision_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS position_lifecycles (
+        plan_id TEXT PRIMARY KEY,
+        entry_passport_id TEXT NOT NULL UNIQUE,
+        symbol TEXT NOT NULL,
+        state TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        broker_quantity TEXT,
+        exit_client_order_id TEXT,
+        plan_json TEXT NOT NULL,
+        lifecycle_json TEXT NOT NULL,
+        FOREIGN KEY (entry_passport_id) REFERENCES evidence_passports(passport_id),
+        FOREIGN KEY (exit_client_order_id) REFERENCES broker_orders(client_order_id)
+    )
+    """,
     """CREATE INDEX IF NOT EXISTS idx_journal_events_occurred_at
     ON journal_events(occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_journal_events_passport
     ON journal_events(passport_id, occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_health_incidents_open
     ON health_incidents(component, opened_at) WHERE resolved_at IS NULL""",
+    """CREATE UNIQUE INDEX IF NOT EXISTS idx_position_lifecycles_active_symbol
+    ON position_lifecycles(symbol)
+    WHERE state != 'CLOSED_BROKER_FLAT'""",
 )
 
 
@@ -505,7 +524,14 @@ class Journal:
 
     def has_unverified_exit(self) -> bool:
         return any(
-            record["status"] in {"EXIT_PENDING_RECONCILIATION", "SUBMIT_UNKNOWN"}
+            record["status"]
+            in {
+                "AUTHORITY_GRANTED",
+                "SUBMISSION_PENDING",
+                "SUBMISSION_FAILED",
+                "EXIT_PENDING_RECONCILIATION",
+                "SUBMIT_UNKNOWN",
+            }
             and record["payload"].get("intent", {}).get("position_intent")
             == "sell_to_close"
             for record in self.broker_order_records()
@@ -513,9 +539,184 @@ class Journal:
 
     def has_broker_uncertainty(self) -> bool:
         return any(
-            record["status"] in {"EXIT_PENDING_RECONCILIATION", "SUBMIT_UNKNOWN"}
+            record["status"]
+            in {
+                "SUBMISSION_PENDING",
+                "SUBMISSION_FAILED",
+                "EXIT_PENDING_RECONCILIATION",
+                "SUBMIT_UNKNOWN",
+            }
             for record in self.broker_order_records()
         )
+
+    def register_position_plan(self, plan: PositionManagementPlan) -> bool:
+        if self.passport_state(plan.entry_passport_id) != "SEALED":
+            raise EvidenceStoreError(
+                "Position management plan requires a sealed entry Evidence Passport"
+            )
+        referee = self.get_referee_result(plan.entry_passport_id)
+        if (
+            referee is None
+            or referee.verdict not in {"APPROVE", "REDUCE"}
+            or referee.max_quantity is None
+            or plan.maximum_quantity > referee.max_quantity
+        ):
+            raise EvidenceStoreError(
+                "Position plan requires APPROVE/REDUCE authority and cannot exceed its quantity"
+            )
+        now = _iso()
+        plan_payload = {
+            "plan_id": plan.plan_id,
+            "entry_passport_id": plan.entry_passport_id,
+            "symbol": plan.symbol,
+            "maximum_quantity": plan.maximum_quantity,
+            "stop_loss_fraction": str(plan.stop_loss_fraction),
+            "profit_target_fraction": (
+                None
+                if plan.profit_target_fraction is None
+                else str(plan.profit_target_fraction)
+            ),
+            "invalidation": {
+                "feature_name": plan.invalidation.feature_name,
+                "comparison": plan.invalidation.comparison,
+                "threshold": str(plan.invalidation.threshold),
+            },
+            "time_stop_at": plan.time_stop_at.astimezone(UTC).isoformat(),
+            "forced_eod_at": plan.forced_eod_at.astimezone(UTC).isoformat(),
+            "strategy_version": plan.strategy_version,
+            "rationale": plan.rationale,
+        }
+        with self._connect() as connection:
+            try:
+                connection.execute(
+                    """INSERT INTO position_lifecycles
+                    (plan_id, entry_passport_id, symbol, state, created_at, updated_at,
+                     plan_json, lifecycle_json)
+                    VALUES (?, ?, ?, 'PLANNED', ?, ?, ?, ?)""",
+                    (
+                        plan.plan_id,
+                        plan.entry_passport_id,
+                        plan.symbol,
+                        now,
+                        now,
+                        json.dumps(plan_payload, sort_keys=True),
+                        json.dumps(
+                            {
+                                "broker_flat_verified": False,
+                                "threshold_defaults_used": False,
+                            },
+                            sort_keys=True,
+                        ),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                return False
+        return True
+
+    def position_lifecycle(self, *, symbol: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT * FROM position_lifecycles
+                WHERE symbol = ? AND state != 'CLOSED_BROKER_FLAT'
+                ORDER BY created_at DESC LIMIT 1""",
+                (symbol,),
+            ).fetchone()
+        return None if row is None else self._position_lifecycle_row(row)
+
+    def active_position_lifecycles(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT * FROM position_lifecycles
+                WHERE state != 'CLOSED_BROKER_FLAT'
+                ORDER BY created_at, plan_id"""
+            ).fetchall()
+        return [self._position_lifecycle_row(row) for row in rows]
+
+    def update_position_lifecycle(
+        self,
+        *,
+        plan_id: str,
+        state: str,
+        broker_quantity: Decimal | None,
+        exit_client_order_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        with self._connect() as connection:
+            existing = connection.execute(
+                """SELECT lifecycle_json FROM position_lifecycles
+                WHERE plan_id = ?""",
+                (plan_id,),
+            ).fetchone()
+            if existing is None:
+                raise EvidenceStoreError(f"Unknown position plan ID: {plan_id}")
+            merged = {
+                **json.loads(str(existing["lifecycle_json"])),
+                **(payload or {}),
+            }
+            cursor = connection.execute(
+                """UPDATE position_lifecycles
+                SET state = ?, updated_at = ?, broker_quantity = ?,
+                    exit_client_order_id = COALESCE(?, exit_client_order_id),
+                    lifecycle_json = ?
+                WHERE plan_id = ?""",
+                (
+                    state,
+                    _iso(),
+                    None if broker_quantity is None else str(broker_quantity),
+                    exit_client_order_id,
+                    json.dumps(merged, sort_keys=True, default=str),
+                    plan_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise EvidenceStoreError(f"Unknown position plan ID: {plan_id}")
+
+    def broker_order_record(self, client_order_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT client_order_id, passport_id, broker_order_id, status,
+                created_at, updated_at, payload_json FROM broker_orders
+                WHERE client_order_id = ?""",
+                (client_order_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {**dict(row), "payload": json.loads(str(row["payload_json"]))}
+
+    @staticmethod
+    def _position_lifecycle_row(row: sqlite3.Row) -> dict[str, Any]:
+        raw_plan = json.loads(str(row["plan_json"]))
+        plan = PositionManagementPlan(
+            plan_id=str(raw_plan["plan_id"]),
+            entry_passport_id=str(raw_plan["entry_passport_id"]),
+            symbol=str(raw_plan["symbol"]),
+            maximum_quantity=int(raw_plan["maximum_quantity"]),
+            stop_loss_fraction=Decimal(str(raw_plan["stop_loss_fraction"])),
+            profit_target_fraction=(
+                None
+                if raw_plan["profit_target_fraction"] is None
+                else Decimal(str(raw_plan["profit_target_fraction"]))
+            ),
+            invalidation=InvalidationRule(
+                feature_name=str(raw_plan["invalidation"]["feature_name"]),
+                comparison=str(raw_plan["invalidation"]["comparison"]),
+                threshold=Decimal(str(raw_plan["invalidation"]["threshold"])),
+            ),
+            time_stop_at=datetime.fromisoformat(str(raw_plan["time_stop_at"])),
+            forced_eod_at=datetime.fromisoformat(str(raw_plan["forced_eod_at"])),
+            strategy_version=str(raw_plan["strategy_version"]),
+            rationale=str(raw_plan["rationale"]),
+        )
+        return {
+            **dict(row),
+            "plan": plan,
+            "broker_quantity": (
+                None
+                if row["broker_quantity"] is None
+                else Decimal(str(row["broker_quantity"]))
+            ),
+            "lifecycle": json.loads(str(row["lifecycle_json"])),
+        }
 
     def claim_ai_decision(
         self,

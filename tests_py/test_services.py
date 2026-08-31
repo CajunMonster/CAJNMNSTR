@@ -23,8 +23,10 @@ from cajnmnstr.models import (
     BrokerOrderSnapshot,
     EventType,
     HealthState,
+    InvalidationRule,
     OrderCandidate,
     OrderIntent,
+    PositionManagementPlan,
     PositionSnapshot,
     RefereeVerdict,
 )
@@ -151,6 +153,7 @@ def authority_fixture(
     broker_lock: bool = False,
     positions: list[PositionSnapshot] | None = None,
     referee_reason: str | None = None,
+    register_entry_plan: bool = True,
 ) -> tuple[Journal, MockBroker, PaperExecutionCoordinator, OperatorAuthorityPath]:
     configured = settings(
         tmp_path,
@@ -169,6 +172,22 @@ def authority_fixture(
         max_quantity=max_quantity,
         max_limit_price=max_limit_price,
     )
+    if register_entry_plan and verdict in {RefereeVerdict.APPROVE, RefereeVerdict.REDUCE}:
+        journal.register_position_plan(
+            PositionManagementPlan(
+                plan_id="cajnmnstr-plan-fixture-001",
+                entry_passport_id="passport-001",
+                symbol="SPY260918C00540000",
+                maximum_quantity=int(max_quantity or 1),
+                stop_loss_fraction=Decimal("0.20"),
+                profit_target_fraction=Decimal("0.30"),
+                invalidation=InvalidationRule("return_5m", "lt", Decimal("-0.01")),
+                time_stop_at=datetime(2026, 8, 31, 19, 0, tzinfo=UTC),
+                forced_eod_at=datetime(2026, 8, 31, 19, 45, tzinfo=UTC),
+                strategy_version="fixture-v1",
+                rationale="Test-only explicit values; no production defaults.",
+            )
+        )
     resolved_positions = positions
     if resolved_positions is None:
         resolved_positions = [verified_position()] if verdict is RefereeVerdict.EXIT else []
@@ -268,6 +287,20 @@ def test_valid_approve_passes_within_limits(tmp_path: Path) -> None:
     assert transition["authority_granted"] == "ENTRY_FULL"
     assert transition["execution_allowed"] is True
     assert transition["mock_broker_result"]["status"] == "accepted"
+
+
+def test_entry_without_durable_position_plan_fails_closed(tmp_path: Path) -> None:
+    journal, broker, _, authority = authority_fixture(
+        tmp_path,
+        register_entry_plan=False,
+    )
+
+    with pytest.raises(AuthorityDeniedError, match="position-management plan"):
+        authority.execute(passport_id="passport-001", candidate=candidate())
+
+    assert broker.submissions == []
+    incidents = journal.list_events(EventType.INCIDENT)
+    assert incidents[-1]["payload"]["component"] == "position_management_plan"
 
 
 def test_valid_reduce_passes_only_with_reduced_size(tmp_path: Path) -> None:

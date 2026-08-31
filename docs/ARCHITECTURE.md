@@ -75,14 +75,31 @@ fresh SIP/OPRA, successful reconciliation, a sealed Passport, and
 `READY_FOR_OPERATOR_REVIEW`; even then entry authority remains disabled and the command stops
 before broker submission.
 
-The optional continuous PAPER read-only controller polls component and broker health every 60
+The optional continuous PAPER controller polls component and broker health every 60
 seconds and defines a decision epoch by the newest completed regular-session five-minute bar. It
 invokes Terra once per new actionable epoch, journals non-actionable evidence and `NO_TRADE` /
 `ABSTAIN` / `BLOCK`, and pauses when a candidate reaches `READY_FOR_OPERATOR_REVIEW`. The loop
-requires the literal `PAPER_READ_ONLY_LOOP` operator confirmation, rejects enabled entry
-authority, and has no broker-submission path. If a verified position exists, new-entry evaluation
-stops and the loop requires an explicitly attached deterministic position-management handler; it
-never improvises an exit or treats missing position management as safe.
+rejects enabled entry authority in every mode. `PAPER_READ_ONLY_LOOP` has no broker-submission
+path. `PAPER_POSITION_MANAGEMENT_LOOP` attaches the deterministic manager and requires the
+separate PAPER confirmation and armed position authority. New-entry analysis stops while a
+position exists, but management continues independently of Terra. The manager can submit only
+`sell_to_close`; it never improvises an exit or treats missing position management as safe.
+
+Before any entry, a durable position plan must be linked to its sealed `APPROVE`/`REDUCE`
+Passport. The plan has no numerical defaults: the owner must explicitly approve the stop-loss
+fraction, optional profit target, deterministic feature/comparison/threshold for thesis
+invalidation, time-stop timestamp, forced-EOD timestamp, strategy version, rationale, symbol, and
+maximum quantity. A plan cannot exceed Referee quantity authority. Runtime calculations compare
+the executable option bid with the plan and the broker average entry price; structured thesis
+invalidation uses normalized deterministic features and never parses Terra prose.
+
+An active condition creates and seals a deterministic exit Passport, records `EXIT` Referee
+authority, and reserves a stable client-order identity before the existing coordinator submits a
+DAY limit at the executable bid. A timeout becomes `SUBMIT_UNKNOWN`; partial fills, open orders,
+restarts, closed markets, and unmatched broker state remain pending and cannot create another
+close. The manager never calls cancel automatically, so a cancellation or replacement ambiguity
+requires reconciled recovery rather than a blind write. Only broker quantity zero advances the
+position lifecycle to `CLOSED_BROKER_FLAT`.
 
 ## Terra proposal boundary
 

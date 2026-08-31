@@ -255,6 +255,7 @@ class PaperExecutionCoordinator:
         if intent.position_intent == "sell_to_close":
             self._verify_existing_long_position(intent)
         else:
+            self._verify_entry_position_plan(intent)
             self._verify_entry_flat_and_reconciled()
         payload = asdict(intent)
         if not self.journal.claim_authorized_order(
@@ -416,6 +417,31 @@ class PaperExecutionCoordinator:
             raise AuthorityDeniedError(message)
         self.journal.resolve_incidents("position_lifecycle")
 
+    def _verify_entry_position_plan(self, intent: OrderIntent) -> None:
+        lifecycle = self.journal.position_lifecycle(symbol=intent.symbol)
+        plan = None if lifecycle is None else lifecycle["plan"]
+        verified = (
+            lifecycle is not None
+            and lifecycle["state"] == "PLANNED"
+            and plan.entry_passport_id == intent.passport_id
+            and plan.maximum_quantity >= intent.quantity
+        )
+        if verified:
+            self.journal.resolve_incidents("position_management_plan")
+            return
+        message = (
+            "New exposure requires an immutable owner-approved position-management plan "
+            "linked to the sealed entry Passport"
+        )
+        _persist_critical_authority_incident(
+            self.settings,
+            self.journal,
+            component="position_management_plan",
+            message=message,
+            protective_action="Keep entry blocked until the complete exit plan is durable.",
+        )
+        raise AuthorityDeniedError(message)
+
     def _verify_existing_long_position(self, intent: OrderIntent) -> None:
         try:
             positions = self.broker.list_positions()
@@ -471,7 +497,13 @@ class OperatorAuthorityPath:
         self.coordinator = coordinator
         self.health_state = health_state
 
-    def execute(self, *, passport_id: str, candidate: OrderCandidate) -> BrokerOrderSnapshot:
+    def execute(
+        self,
+        *,
+        passport_id: str,
+        candidate: OrderCandidate,
+        resume_authorized: bool = False,
+    ) -> BrokerOrderSnapshot:
         passport_state = self.journal.passport_state(passport_id)
         if passport_state != "SEALED":
             reason = "PASSPORT_MISSING" if passport_state is None else "PASSPORT_UNSEALED"
@@ -592,16 +624,28 @@ class OperatorAuthorityPath:
             passport_id=passport_id,
             payload=authorization_payload,
         ):
-            self._deny(
-                passport_id=passport_id,
-                passport_exists=True,
-                verdict=verdict.value,
-                authority=AuthorityGrant.NONE,
-                reason_code="DUPLICATE_CLIENT_ORDER_ID",
-                error=DuplicateOrderIdentityError(
-                    f"Client order identity already exists: {intent.client_order_id}"
-                ),
+            existing = self.journal.broker_order_record(intent.client_order_id)
+            resumable = (
+                resume_authorized
+                and existing is not None
+                and existing["status"] == "AUTHORITY_GRANTED"
+                and existing["passport_id"] == passport_id
+                and json.dumps(
+                    existing["payload"].get("intent"), sort_keys=True, default=str
+                )
+                == json.dumps(asdict(intent), sort_keys=True, default=str)
             )
+            if not resumable:
+                self._deny(
+                    passport_id=passport_id,
+                    passport_exists=True,
+                    verdict=verdict.value,
+                    authority=AuthorityGrant.NONE,
+                    reason_code="DUPLICATE_CLIENT_ORDER_ID",
+                    error=DuplicateOrderIdentityError(
+                        f"Client order identity already exists: {intent.client_order_id}"
+                    ),
+                )
 
         try:
             result = self.coordinator.submit(intent)
