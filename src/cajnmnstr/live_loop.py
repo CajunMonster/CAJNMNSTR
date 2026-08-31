@@ -35,6 +35,14 @@ class ContinuousLiveRunner(Protocol):
         health_path: Path | None = None,
     ) -> LiveDecisionOutcome: ...
 
+    def publish_monitor_state(
+        self,
+        collection: LiveEvidenceCollection,
+        *,
+        dashboard_path: Path | None = None,
+        health_path: Path | None = None,
+    ) -> None: ...
+
 
 class PositionManagementHandler(Protocol):
     def run_cycle(self, collection: LiveEvidenceCollection) -> str: ...
@@ -137,6 +145,7 @@ class ContinuousDecisionLoop:
                 epoch = _decision_epoch(collection)
                 last_epoch = epoch
                 state = "MONITORING"
+                decision_published = False
                 management_state = (
                     None
                     if self.position_manager is None
@@ -206,12 +215,20 @@ class ContinuousDecisionLoop:
                         dashboard_path=dashboard_path,
                         health_path=health_path,
                     )
+                    decision_published = True
                     canonical_decisions += 1
                     cached_decisions += int(outcome.decision.ai_cached)
                     last_passport_id = outcome.decision.passport_id
                     state = outcome.decision.operator_review.state
                     if state == "READY_FOR_OPERATOR_REVIEW":
                         terminal_state = "OPERATOR_REVIEW_PENDING"
+
+                if not decision_published:
+                    self.runner.publish_monitor_state(
+                        collection,
+                        dashboard_path=dashboard_path,
+                        health_path=health_path,
+                    )
 
                 warning_states = {
                     "BROKER_RECONCILIATION_REQUIRED",

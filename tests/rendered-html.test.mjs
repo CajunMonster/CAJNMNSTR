@@ -31,7 +31,7 @@ test("server-renders the CAJNMNSTR dashboard", async () => {
   assert.match(html, /SYSTEM HEALTH/);
   assert.match(html, /PAPER/);
   assert.match(html, /MARKET CLOSED/);
-  assert.match(html, /NON-ACTIONABLE SAFE STOP/);
+  assert.match(html, /MONITORING(?:<!-- -->|\s)*·(?:<!-- -->|\s)*NO DECISION/);
   assert.match(html, /ENTRY(?:<!-- -->|\s)*DISABLED/);
   assert.match(html, /POSITION MANAGEMENT/);
   assert.match(html, /BROKER LOCK/);
@@ -60,5 +60,7 @@ test("dashboard state exposes separate broker authorities without the legacy swi
   assert.equal(state.market.data_state, "STALE");
   assert.equal(state.market.feed, "ALPACA SIP");
   assert.equal(state.options.feed, "OPRA");
-  assert.equal(state.decision.state, "NOT_ELIGIBLE");
+  assert.equal(state.decision.state, "MONITORING_PAUSED");
+  assert.equal(state.proposal.direction, "NOT_EVALUATED");
+  assert.equal(state.passport.sealed, false);
 });

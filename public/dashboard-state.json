@@ -2,8 +2,8 @@
   "schema_version": 1,
   "mode": "PAPER",
   "operational_state": "PAUSED",
-  "truth_label": "PAPER · MARKET CLOSED · NON-ACTIONABLE SAFE STOP",
-  "updated_at": "2026-08-30T17:22:47.295580+00:00",
+  "truth_label": "PAPER · MARKET CLOSED · MONITORING · NO DECISION",
+  "updated_at": "2026-08-31T23:30:08.620648+00:00",
   "controls": {
     "entry_enabled": false,
     "entry_armed": false,
@@ -24,29 +24,29 @@
       "id": "sip",
       "label": "SIP MARKET DATA",
       "value": "STALE",
-      "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 148966.8s)."
+      "state": "verified",
+      "detail": "Data age 6.7s is within policy."
     },
     {
       "id": "opra",
       "label": "OPRA OPTIONS",
       "value": "STALE",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 163367.3s)."
+      "detail": "Data is stale or time-inconsistent (age 12608.6s)."
     },
     {
       "id": "terra",
       "label": "TERRA AI",
-      "value": "VALID",
-      "state": "verified",
-      "detail": "Structured proposal only; no broker tools"
+      "value": "STANDBY",
+      "state": "paused",
+      "detail": "Terra is configured and was intentionally not invoked for this cycle."
     },
     {
       "id": "referee",
       "label": "REFEREE",
-      "value": "BLOCK",
-      "state": "verified",
-      "detail": "Deterministic authority intact"
+      "value": "STANDBY",
+      "state": "paused",
+      "detail": "No actionable evidence epoch was presented."
     }
   ],
   "account": {
@@ -57,110 +57,110 @@
     "open_pl": 0.0,
     "position_count": 0,
     "open_order_count": 0,
-    "as_of": "2026-08-30T17:22:47.295580+00:00",
+    "as_of": "2026-08-31T23:30:08.620648+00:00",
     "source": "Authenticated Alpaca PAPER read-only"
   },
   "market": {
     "symbol": "SPY",
-    "price": 769.41,
-    "previous_close": 771.1,
-    "change": -1.69,
-    "change_percent": -0.21916742316171703,
-    "last_update": "2026-08-29T00:00:00.511933+00:00",
+    "price": 767.39,
+    "previous_close": 769.35,
+    "change": -1.96,
+    "change_percent": -0.2547605121206213,
+    "last_update": "2026-08-31T23:30:01.969193+00:00",
     "session": "MARKET CLOSED",
     "data_state": "STALE",
     "feed": "ALPACA SIP",
     "candles": [
       {
         "t": "14:55",
-        "o": 768.52,
-        "h": 768.79,
-        "l": 768.37,
-        "c": 768.68
+        "o": 765.64,
+        "h": 765.895,
+        "l": 765.55,
+        "c": 765.67
       },
       {
         "t": "15:00",
-        "o": 768.68,
-        "h": 768.95,
-        "l": 768.47,
-        "c": 768.8
+        "o": 765.67,
+        "h": 766.05,
+        "l": 765.67,
+        "c": 765.81
       },
       {
         "t": "15:05",
-        "o": 768.79,
-        "h": 769.37,
-        "l": 768.7101,
-        "c": 769.35
+        "o": 765.79,
+        "h": 766.04,
+        "l": 765.68,
+        "c": 766.015
       },
       {
         "t": "15:10",
-        "o": 769.34,
-        "h": 769.38,
-        "l": 768.99,
-        "c": 769.2363
+        "o": 766.03,
+        "h": 766.2165,
+        "l": 765.941,
+        "c": 766.18
       },
       {
         "t": "15:15",
-        "o": 769.22,
-        "h": 769.28,
-        "l": 768.9967,
-        "c": 769.21
+        "o": 766.18,
+        "h": 766.25,
+        "l": 765.98,
+        "c": 766.035
       },
       {
         "t": "15:20",
-        "o": 769.22,
-        "h": 769.52,
-        "l": 769.15,
-        "c": 769.32
+        "o": 766.03,
+        "h": 766.49,
+        "l": 765.99,
+        "c": 766.41
       },
       {
         "t": "15:25",
-        "o": 769.31,
-        "h": 769.59,
-        "l": 769.29,
-        "c": 769.515
+        "o": 766.42,
+        "h": 766.75,
+        "l": 766.27,
+        "c": 766.635
       },
       {
         "t": "15:30",
-        "o": 769.51,
-        "h": 769.5101,
-        "l": 769.18,
-        "c": 769.4
+        "o": 766.62,
+        "h": 766.63,
+        "l": 766.18,
+        "c": 766.44
       },
       {
         "t": "15:35",
-        "o": 769.4,
-        "h": 769.575,
-        "l": 769.13,
-        "c": 769.545
+        "o": 766.46,
+        "h": 766.7,
+        "l": 766.39,
+        "c": 766.64
       },
       {
         "t": "15:40",
-        "o": 769.55,
-        "h": 769.79,
-        "l": 769.53,
-        "c": 769.62
+        "o": 766.63,
+        "h": 767.205,
+        "l": 766.6,
+        "c": 767.01
       },
       {
         "t": "15:45",
-        "o": 769.6,
-        "h": 769.69,
-        "l": 769.02,
-        "c": 769.24
+        "o": 767.0,
+        "h": 767.16,
+        "l": 766.6,
+        "c": 766.85
       },
       {
         "t": "15:50",
-        "o": 769.25,
-        "h": 769.78,
-        "l": 769.11,
-        "c": 769.36
+        "o": 766.87,
+        "h": 767.65,
+        "l": 766.87,
+        "c": 767.3825
       },
       {
         "t": "15:55",
-        "o": 769.35,
-        "h": 769.88,
-        "l": 769.07,
-        "c": 769.34
+        "o": 767.36,
+        "h": 767.995,
+        "l": 766.58,
+        "c": 766.95
       }
     ]
   },
@@ -169,47 +169,47 @@
     "support": 0,
     "opposition": 0,
     "session": "MARKET CLOSED",
-    "detail": "Deterministic live features; authority remains subject to health."
+    "detail": "No Referee decision ran for this monitoring-only cycle."
   },
   "options": {
     "feed": "OPRA",
     "status": "AUTHORIZED · STALE",
     "chain_health": "VALID",
-    "atm_iv": 9.835,
-    "skew": 0.13,
+    "atm_iv": 9.505,
+    "skew": 1.69,
     "skew_reason": "Same-strike skew",
-    "last_update": "2026-08-28T19:59:59.999977+00:00",
+    "last_update": "2026-08-31T19:59:59.999962+00:00",
     "surface": [
       {
-        "label": "C00771000",
-        "value": 11.21
+        "label": "C00769000",
+        "value": 10.59
       },
       {
-        "label": "P00771000",
-        "value": 12.6
+        "label": "P00769000",
+        "value": 13.13
       },
       {
-        "label": "C00770000",
-        "value": 9.86
+        "label": "C00768000",
+        "value": 8.59
       },
       {
-        "label": "P00770000",
-        "value": 9.97
+        "label": "P00768000",
+        "value": 10.24
       }
     ]
   },
   "proposal": {
-    "direction": "NO_TRADE",
+    "direction": "NOT_EVALUATED",
     "time_horizon": "INTRADAY",
-    "thesis": "The snapshot is explicitly non-actionable: the market session is closed and the bars, options, and SIP quote sources are stale. Intraday direction cannot be responsibly established from this evidence.",
-    "counterargument": "The last available deterministic signals lean modestly bearish—SPY was below VWAP and below the opening range, with negative 5- and 15-minute returns—so a LONG_PUT could otherwise be considered.",
-    "uncertainty": "HIGH",
-    "evidence_count": 5,
-    "invalidation": "Invalidate this NO_TRADE decision only when an open-session snapshot reports actionable_fresh=true with refreshed SPY bars, SIP quote, and OPRA options data; until then, stale or closed-session inputs remain disqualifying."
+    "thesis": "Terra was not invoked because the cycle was non-actionable.",
+    "counterargument": "No directional proposal was requested.",
+    "uncertainty": "NOT_EVALUATED",
+    "evidence_count": 0,
+    "invalidation": "A fresh regular-session evidence epoch is required."
   },
   "decision": {
-    "verdict": "BLOCK",
-    "state": "NOT_ELIGIBLE",
+    "verdict": "NOT_EVALUATED",
+    "state": "MONITORING_PAUSED",
     "symbol": null,
     "contract_label": null,
     "expiration": null,
@@ -219,31 +219,29 @@
     "authority_max_debit": null,
     "risk_amount": null,
     "risk_percent": null,
-    "uncertainty": "HIGH",
+    "uncertainty": "NOT_EVALUATED",
     "reasons": [
-      "STALE_EVIDENCE",
-      "STALE_MARKET_SESSION_CLOSED",
-      "STALE_SPY_BARS",
-      "HEALTH_MARKET_SESSION",
-      "HEALTH_SPY_QUOTE"
+      "market_session",
+      "option_quote",
+      "evidence_snapshot"
     ]
   },
   "passport": {
-    "id": "live-live-20260830T172237Z-9dfebe035a",
-    "fixture_id": "alpaca-paper-20260830T172237Z",
-    "sealed": true,
-    "source": "Authenticated Alpaca SIP/OPRA Evidence Snapshot"
+    "id": null,
+    "fixture_id": "alpaca-paper-20260831T233008Z",
+    "sealed": false,
+    "source": "No Passport created for this monitoring-only cycle"
   },
   "execution": [
     {
       "stage": "PROPOSED",
-      "status": "COMPLETE",
-      "detail": "Terra structured proposal validated"
+      "status": "NOT STARTED",
+      "detail": "Terra not invoked"
     },
     {
       "stage": "REFEREE",
-      "status": "BLOCK",
-      "detail": "STALE_EVIDENCE"
+      "status": "NOT STARTED",
+      "detail": "No actionable evidence epoch"
     },
     {
       "stage": "SUBMITTED",
@@ -263,27 +261,9 @@
   ],
   "activity": [
     {
-      "time": "13:22:47",
-      "kind": "STOP",
-      "text": "Sealed Passport · broker submission false",
-      "mode": "PAPER"
-    },
-    {
-      "time": "13:22:37",
-      "kind": "REFEREE",
-      "text": "BLOCK · STALE_EVIDENCE",
-      "mode": "PAPER"
-    },
-    {
-      "time": "13:22:37",
-      "kind": "TERRA",
-      "text": "NO_TRADE · HIGH",
-      "mode": "PAPER"
-    },
-    {
-      "time": "13:22:37",
-      "kind": "MARKET",
-      "text": "Authenticated SIP/OPRA snapshot normalized",
+      "time": "19:30:08",
+      "kind": "MONITOR",
+      "text": "MARKET CLOSED · broker reconciled · no decision",
       "mode": "PAPER"
     }
   ],
@@ -309,20 +289,20 @@
     {
       "id": "spy_quote",
       "label": "SPY QUOTE",
-      "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 148966.8s)."
+      "state": "HEALTHY",
+      "detail": "Data age 6.7s is within policy."
     },
     {
       "id": "option_quote",
       "label": "OPTION QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 163367.3s)."
+      "detail": "Data is stale or time-inconsistent (age 12608.6s)."
     },
     {
       "id": "ai_provider",
       "label": "AI PROVIDER",
       "state": "HEALTHY",
-      "detail": "Terra returned a schema-valid proposal."
+      "detail": "Terra is configured and was intentionally not invoked for this cycle."
     }
   ]
 }

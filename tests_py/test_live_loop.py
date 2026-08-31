@@ -84,6 +84,7 @@ class FakeRunner:
         self.collector = SequenceCollector(items)
         self.states = list(states)
         self.calls = []
+        self.monitor_calls = []
 
     def run_collection(self, item, *, dashboard_path=None, health_path=None):
         del dashboard_path, health_path
@@ -96,6 +97,10 @@ class FakeRunner:
                 operator_review=SimpleNamespace(state=state),
             )
         )
+
+    def publish_monitor_state(self, item, *, dashboard_path=None, health_path=None):
+        del dashboard_path, health_path
+        self.monitor_calls.append(item)
 
 
 class FakePositionManager:
@@ -149,6 +154,7 @@ def test_loop_does_not_repeat_terra_for_unchanged_bar_epoch(tmp_path) -> None:
 
     assert result.canonical_decisions == 1
     assert len(runner.calls) == 1
+    assert len(runner.monitor_calls) == 1
 
 
 def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> None:

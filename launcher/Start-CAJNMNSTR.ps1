@@ -7,6 +7,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $localUrl = 'http://127.0.0.1:8841/'
 $healthUrl = 'http://127.0.0.1:8841/health.json'
 $runtimeRoot = Join-Path $projectRoot 'runtime'
+$serverStatePath = Join-Path $runtimeRoot 'server.json'
 $nodeRoot = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin'
 $vinextShim = Join-Path $projectRoot 'node_modules\.bin\vinext.CMD'
 
@@ -64,16 +65,19 @@ New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
 $env:PATH = "$nodeRoot;$env:PATH"
 $env:WRANGLER_LOG_PATH = Join-Path $runtimeRoot 'wrangler.log'
 
-$server = Start-Process -FilePath $vinextShim -ArgumentList @('start', '--hostname', '127.0.0.1', '--port', '8841') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
+# The local operator dashboard consumes JSON that the live loop updates in public/.
+# The development server serves those files from disk; the production server freezes
+# them into the build output and can leave the operator looking at stale state.
+$server = Start-Process -FilePath $vinextShim -ArgumentList @('dev', '--hostname', '127.0.0.1', '--port', '8841') -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
 [pscustomobject]@{
     app = 'CAJNMNSTR'
     pid = $server.Id
     started_at = [DateTimeOffset]::Now.ToString('o')
     url = $localUrl
-} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeRoot 'server.json') -Encoding utf8
+} | ConvertTo-Json | Set-Content -LiteralPath $serverStatePath -Encoding utf8
 
 $healthy = $false
-for ($attempt = 0; $attempt -lt 40; $attempt++) {
+for ($attempt = 0; $attempt -lt 80; $attempt++) {
     Start-Sleep -Milliseconds 250
     if (Test-CAJNMNSTRHealth) {
         $healthy = $true
@@ -87,6 +91,16 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {
 if (-not $healthy) {
     Show-CAJNMNSTRError 'CAJNMNSTR did not become healthy on port 8841. No browser was opened.'
     exit 5
+}
+
+$activeListener = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8841 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($activeListener) {
+    [pscustomobject]@{
+        app = 'CAJNMNSTR'
+        pid = $activeListener.OwningProcess
+        started_at = [DateTimeOffset]::Now.ToString('o')
+        url = $localUrl
+    } | ConvertTo-Json | Set-Content -LiteralPath $serverStatePath -Encoding utf8
 }
 
 if (-not $NoOpen) {

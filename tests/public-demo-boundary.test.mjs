@@ -60,7 +60,9 @@ test("public checkpoint remains read-only and non-actionable", async () => {
   assert.equal(dashboard.operational_state, "PAUSED");
   assert.equal(dashboard.market.session, "MARKET CLOSED");
   assert.equal(dashboard.market.data_state, "STALE");
-  assert.equal(dashboard.decision.state, "NOT_ELIGIBLE");
+  assert.equal(dashboard.decision.state, "MONITORING_PAUSED");
+  assert.equal(dashboard.proposal.direction, "NOT_EVALUATED");
+  assert.equal(dashboard.passport.sealed, false);
   assert.equal(health.broker_submission_allowed, false);
 });
 
@@ -69,4 +71,14 @@ test("dashboard application has no mutation API route", async () => {
   assert.equal(appEntries.some((entry) => /(^|[\\/])api([\\/]|$)/i.test(entry)), false);
 
   await assert.rejects(access(new URL("app/api/", projectRoot)));
+});
+
+test("local launcher serves continuously updated runtime JSON", async () => {
+  const launcher = await readFile(
+    new URL("launcher/Start-CAJNMNSTR.ps1", projectRoot),
+    "utf8",
+  );
+  assert.match(launcher, /-ArgumentList\s+@\('dev'/);
+  assert.doesNotMatch(launcher, /-ArgumentList\s+@\('start'/);
+  assert.match(launcher, /activeListener\.OwningProcess/);
 });

@@ -418,6 +418,33 @@ def test_closed_market_path_blocks_and_runner_never_submits(tmp_path: Path) -> N
     }
 
 
+def test_monitor_publication_refreshes_truth_without_invoking_terra(tmp_path: Path) -> None:
+    app, reader, journal, collection = collect(tmp_path)
+    provider = CapturingProvider()
+    dashboard_path = tmp_path / "dashboard-state.json"
+    health_path = tmp_path / "health.json"
+
+    LiveDecisionRunner(app, journal, reader, provider).publish_monitor_state(
+        collection,
+        dashboard_path=dashboard_path,
+        health_path=health_path,
+    )
+
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    health = json.loads(health_path.read_text(encoding="utf-8"))
+    assert provider.payloads == []
+    assert dashboard["proposal"]["direction"] == "NOT_EVALUATED"
+    assert dashboard["decision"]["state"] == "MONITORING_PAUSED"
+    assert dashboard["passport"]["sealed"] is False
+    assert dashboard["controls"]["broker_submission_allowed"] is False
+    assert health["state"] == "PAUSED"
+    ai_health = next(
+        item for item in health["components"] if item["component"] == "ai_provider"
+    )
+    assert ai_health["state"] == "HEALTHY"
+    assert reader.submit_calls == 0
+
+
 def test_missing_bars_and_missing_greeks_fail_safely(tmp_path: Path) -> None:
     missing_bars = FakeLiveReader()
     missing_bars.bars = missing_bars.bars[:5]

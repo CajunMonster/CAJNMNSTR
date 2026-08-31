@@ -314,7 +314,7 @@ def _component(
 def build_live_health(
     settings: Settings,
     collection: LiveEvidenceCollection,
-    analysis: AnalysisResult,
+    analysis: AnalysisResult | None,
 ) -> HealthReport:
     checked_at = datetime.now(UTC)
     safe_stop = "Keep new entries blocked and preserve the current broker state."
@@ -405,9 +405,21 @@ def build_live_health(
         ),
         _component(
             "ai_provider",
-            HealthState.HEALTHY if analysis.failure_code is None else HealthState.DEGRADED,
             (
-                "Terra returned a schema-valid proposal."
+                HealthState.HEALTHY
+                if analysis is None and settings.ai_configured
+                else HealthState.PAUSED
+                if analysis is None
+                else HealthState.HEALTHY
+                if analysis.failure_code is None
+                else HealthState.DEGRADED
+            ),
+            (
+                "Terra is configured and was intentionally not invoked for this cycle."
+                if analysis is None and settings.ai_configured
+                else "Terra is not configured."
+                if analysis is None
+                else "Terra returned a schema-valid proposal."
                 if analysis.failure_code is None
                 else f"Terra failed closed: {analysis.failure_code}."
             ),
@@ -535,7 +547,12 @@ def _dashboard_state(
     reasons.extend(f"STALE_{item}" for item in snapshot.stale_sources[:2])
     reasons.extend(f"HEALTH_{item.upper()}" for item in blockers[:2])
     session = "MARKET OPEN" if collection.clock.is_open else "MARKET CLOSED"
-    data_state = "LIVE" if health.state is HealthState.HEALTHY else "STALE"
+    data_state = (
+        "LIVE"
+        if components["spy_quote"].state is HealthState.HEALTHY
+        and components["option_quote"].state is HealthState.HEALTHY
+        else "STALE"
+    )
     direction = decision.proposal.direction
     regime_state = (
         "BULLISH"
@@ -766,6 +783,252 @@ def _dashboard_state(
     }
 
 
+def _monitor_dashboard_state(
+    settings: Settings,
+    collection: LiveEvidenceCollection,
+    health: HealthReport,
+) -> dict[str, Any]:
+    """Represent a monitoring-only cycle without fabricating a proposal or Passport."""
+    snapshot = collection.snapshot
+    components = {item.component: item for item in health.components}
+    midpoint = (collection.quote.bid_price + collection.quote.ask_price) / Decimal("2")
+    session_date = (
+        None
+        if not collection.completed_bars
+        else collection.completed_bars[-1].timestamp.astimezone(NEW_YORK).date()
+    )
+    previous_close = _previous_close(list(collection.daily_bars), session_date)
+    change = None if previous_close is None else midpoint - previous_close
+    change_percent = (
+        None
+        if previous_close is None or previous_close == 0
+        else change / previous_close * Decimal("100")
+    )
+    latest_option_at = max(
+        (item.quote_at for item in collection.option_chain if item.quote_at is not None),
+        default=None,
+    )
+    open_pl = sum((item.unrealized_pl for item in collection.positions), Decimal("0"))
+    session = "MARKET OPEN" if collection.clock.is_open else "MARKET CLOSED"
+    data_state = (
+        "LIVE"
+        if components["spy_quote"].state is HealthState.HEALTHY
+        and components["option_quote"].state is HealthState.HEALTHY
+        else "STALE"
+    )
+    now_iso = health.checked_at.isoformat()
+    blockers = [
+        item.component for item in health.components if item.state is not HealthState.HEALTHY
+    ]
+    atm_iv = snapshot.features.get("atm_iv")
+    skew = snapshot.features.get("simple_skew")
+    surface = sorted(
+        (
+            item
+            for item in collection.option_chain
+            if item.implied_volatility is not None and item.delta is not None
+        ),
+        key=lambda item: (abs(abs(item.delta) - Decimal("0.50")), item.symbol),
+    )[:4]
+    return {
+        "schema_version": 1,
+        "mode": "PAPER",
+        "operational_state": health.state.value,
+        "truth_label": f"PAPER · {session} · MONITORING · NO DECISION",
+        "updated_at": now_iso,
+        "controls": {
+            "entry_enabled": settings.entry_enabled,
+            "entry_armed": settings.entry_armed,
+            "position_management_enabled": settings.position_management_enabled,
+            "position_management_armed": settings.position_management_armed,
+            "broker_lock_active": settings.broker_lock,
+            "broker_submission_allowed": False,
+        },
+        "connections": [
+            {
+                "id": "alpaca",
+                "label": "ALPACA",
+                "value": "PAPER AUTH",
+                "state": "verified",
+                "detail": "Authenticated read-only account and broker state",
+            },
+            {
+                "id": "sip",
+                "label": "SIP MARKET DATA",
+                "value": data_state,
+                "state": (
+                    "verified"
+                    if components["spy_quote"].state is HealthState.HEALTHY
+                    else "paused"
+                ),
+                "detail": components["spy_quote"].message,
+            },
+            {
+                "id": "opra",
+                "label": "OPRA OPTIONS",
+                "value": data_state,
+                "state": (
+                    "verified"
+                    if components["option_quote"].state is HealthState.HEALTHY
+                    else "paused"
+                ),
+                "detail": components["option_quote"].message,
+            },
+            {
+                "id": "terra",
+                "label": "TERRA AI",
+                "value": "STANDBY",
+                "state": "paused",
+                "detail": components["ai_provider"].message,
+            },
+            {
+                "id": "referee",
+                "label": "REFEREE",
+                "value": "STANDBY",
+                "state": "paused",
+                "detail": "No actionable evidence epoch was presented.",
+            },
+        ],
+        "account": {
+            "equity": _number(collection.account.equity),
+            "buying_power": _number(collection.account.buying_power),
+            "options_buying_power": _number(collection.account.options_buying_power),
+            "day_pl": None,
+            "open_pl": _number(open_pl),
+            "position_count": len(collection.positions),
+            "open_order_count": len(collection.open_orders),
+            "as_of": now_iso,
+            "source": "Authenticated Alpaca PAPER read-only",
+        },
+        "market": {
+            "symbol": "SPY",
+            "price": _number(midpoint),
+            "previous_close": _number(previous_close),
+            "change": _number(change),
+            "change_percent": _number(change_percent),
+            "last_update": _iso(collection.quote.observed_at),
+            "session": session,
+            "data_state": data_state,
+            "feed": "ALPACA SIP",
+            "candles": [
+                {
+                    "t": bar.timestamp.astimezone(NEW_YORK).strftime("%H:%M"),
+                    "o": _number(bar.open),
+                    "h": _number(bar.high),
+                    "l": _number(bar.low),
+                    "c": _number(bar.close),
+                }
+                for bar in collection.completed_bars[-13:]
+            ],
+        },
+        "regime": {
+            "state": "NEUTRAL",
+            "support": 0,
+            "opposition": 0,
+            "session": session,
+            "detail": "No Referee decision ran for this monitoring-only cycle.",
+        },
+        "options": {
+            "feed": "OPRA",
+            "status": "AUTHORIZED · " + data_state,
+            "chain_health": "VALID" if not snapshot.hard_failures else "INVALID",
+            "atm_iv": _number(atm_iv * Decimal("100") if isinstance(atm_iv, Decimal) else None),
+            "skew": _number(skew * Decimal("100") if isinstance(skew, Decimal) else None),
+            "skew_reason": (
+                "Same-strike skew" if isinstance(skew, Decimal) else "No valid same-strike skew"
+            ),
+            "last_update": _iso(latest_option_at) or now_iso,
+            "surface": [
+                {
+                    "label": item.symbol[-9:],
+                    "value": float(item.implied_volatility * Decimal("100")),
+                }
+                for item in surface
+                if item.implied_volatility is not None
+            ],
+        },
+        "proposal": {
+            "direction": "NOT_EVALUATED",
+            "time_horizon": "INTRADAY",
+            "thesis": "Terra was not invoked because the cycle was non-actionable.",
+            "counterargument": "No directional proposal was requested.",
+            "uncertainty": "NOT_EVALUATED",
+            "evidence_count": 0,
+            "invalidation": "A fresh regular-session evidence epoch is required.",
+        },
+        "decision": {
+            "verdict": "NOT_EVALUATED",
+            "state": (
+                "MONITORING"
+                if health.state is HealthState.HEALTHY
+                else "MONITORING_PAUSED"
+            ),
+            "symbol": None,
+            "contract_label": None,
+            "expiration": None,
+            "dte": None,
+            "quantity_authority": None,
+            "limit_price": None,
+            "authority_max_debit": None,
+            "risk_amount": None,
+            "risk_percent": None,
+            "uncertainty": "NOT_EVALUATED",
+            "reasons": blockers or ["NO_ACTIONABLE_EVIDENCE_EPOCH"],
+        },
+        "passport": {
+            "id": None,
+            "fixture_id": snapshot.fixture_id,
+            "sealed": False,
+            "source": "No Passport created for this monitoring-only cycle",
+        },
+        "execution": [
+            {"stage": "PROPOSED", "status": "NOT STARTED", "detail": "Terra not invoked"},
+            {
+                "stage": "REFEREE",
+                "status": "NOT STARTED",
+                "detail": "No actionable evidence epoch",
+            },
+            {
+                "stage": "SUBMITTED",
+                "status": "STOPPED",
+                "detail": "Entry disabled; broker path absent",
+            },
+            {"stage": "FILLED", "status": "NOT STARTED", "detail": "No broker order"},
+            {"stage": "EXIT", "status": "NOT STARTED", "detail": "No lifecycle change"},
+        ],
+        "activity": [
+            {
+                "time": health.checked_at.astimezone(NEW_YORK).strftime("%H:%M:%S"),
+                "kind": "MONITOR",
+                "text": (
+                    f"{session} · broker reconciled · no decision"
+                    if collection.reconciliation.matched
+                    else f"{session} · reconciliation required · no decision"
+                ),
+                "mode": "PAPER",
+            }
+        ],
+        "systems": [
+            {
+                "id": item.component,
+                "label": item.component.replace("_", " ").upper(),
+                "state": item.state.value,
+                "detail": item.message,
+            }
+            for item in health.components
+            if item.component
+            in {
+                "spy_quote",
+                "option_quote",
+                "alpaca",
+                "ai_provider",
+                "evidence_store",
+                "broker_reconciliation",
+            }
+        ],
+    }
+
+
 def write_dashboard_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -843,6 +1106,22 @@ class LiveDecisionRunner:
         if health_path is not None:
             write_health_state(health_path, self.settings, health)
         return LiveDecisionOutcome(collection, decision, health, dashboard)
+
+    def publish_monitor_state(
+        self,
+        collection: LiveEvidenceCollection,
+        *,
+        dashboard_path: Path | None = None,
+        health_path: Path | None = None,
+    ) -> None:
+        """Publish a truthful monitoring state without invoking the AI decision path."""
+        health = build_live_health(self.settings, collection, None)
+        self._journal_health(health)
+        dashboard = _monitor_dashboard_state(self.settings, collection, health)
+        if dashboard_path is not None:
+            write_dashboard_state(dashboard_path, dashboard)
+        if health_path is not None:
+            write_health_state(health_path, self.settings, health)
 
     def _analysis(self, decision: ReplayDecisionResult) -> AnalysisResult:
         return AnalysisResult(
