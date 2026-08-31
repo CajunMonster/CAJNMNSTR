@@ -29,12 +29,13 @@ from .live_snapshot import (
     LiveDecisionRunner,
     outcome_summary,
 )
-from .models import EventType, HealthState, InvalidationRule, PositionManagementPlan
+from .models import EventType, HealthState
 from .option_chain import parse_option_chain_payload
 from .position_management import (
     POSITION_PLAN_CONFIRMATION,
     DeterministicPositionManager,
 )
+from .position_policy import INITIAL_POLICY_VERSION, build_initial_position_plan
 from .services import OperatorAuthorityPath, PaperExecutionCoordinator
 
 
@@ -274,13 +275,6 @@ def _register_position_plan(
     entry_passport_id: str,
     symbol: str,
     maximum_quantity: int,
-    stop_loss_fraction: Decimal,
-    profit_target_fraction: Decimal | None,
-    invalidation_feature: str,
-    invalidation_comparison: str,
-    invalidation_threshold: Decimal,
-    time_stop_at: datetime,
-    forced_eod_at: datetime,
     strategy_version: str,
     rationale: str,
 ) -> int:
@@ -292,20 +286,17 @@ def _register_position_plan(
         raise ValueError("Prepare the durable exit plan while new-entry authority is disabled")
     journal = Journal(settings.journal_path)
     journal.initialize()
-    plan = PositionManagementPlan(
+    passport = journal.get_passport(entry_passport_id)
+    referee = journal.get_referee_result(entry_passport_id)
+    if passport is None or passport["state"] != "SEALED" or referee is None:
+        raise ValueError("Position plan requires a sealed Passport and durable Referee result")
+    plan = build_initial_position_plan(
+        passport["payload"],
+        referee,
         plan_id=plan_id,
         entry_passport_id=entry_passport_id,
         symbol=symbol,
         maximum_quantity=maximum_quantity,
-        stop_loss_fraction=stop_loss_fraction,
-        profit_target_fraction=profit_target_fraction,
-        invalidation=InvalidationRule(
-            feature_name=invalidation_feature,
-            comparison=invalidation_comparison,
-            threshold=invalidation_threshold,
-        ),
-        time_stop_at=time_stop_at,
-        forced_eod_at=forced_eod_at,
         strategy_version=strategy_version,
         rationale=rationale,
     )
@@ -319,6 +310,13 @@ def _register_position_plan(
             "plan_id": plan_id,
             "symbol": symbol,
             "maximum_quantity": maximum_quantity,
+            "policy_version": INITIAL_POLICY_VERSION,
+            "invalidation_formula_version": plan.invalidation_formula_version,
+            "invalidation_feature": plan.invalidation.feature_name,
+            "invalidation_comparison": plan.invalidation.comparison,
+            "invalidation_threshold": plan.invalidation.threshold,
+            "time_stop_duration_minutes": plan.time_stop_duration_minutes,
+            "forced_eod_at": plan.forced_eod_at,
             "strategy_version": strategy_version,
             "rationale": rationale,
             "owner_approved": True,
@@ -336,6 +334,11 @@ def _register_position_plan(
                 "entry_passport_id": entry_passport_id,
                 "symbol": symbol,
                 "strategy_version": strategy_version,
+                "policy_version": INITIAL_POLICY_VERSION,
+                "invalidation_formula_version": plan.invalidation_formula_version,
+                "invalidation_threshold": plan.invalidation.threshold,
+                "time_stop_duration_minutes": plan.time_stop_duration_minutes,
+                "forced_eod_at": plan.forced_eod_at,
                 "owner_approved": True,
                 "threshold_defaults_used": False,
                 "entry_enabled": False,
@@ -853,17 +856,6 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--entry-passport-id", required=True)
     plan.add_argument("--symbol", required=True)
     plan.add_argument("--maximum-quantity", type=int, required=True)
-    plan.add_argument("--stop-loss-fraction", type=Decimal, required=True)
-    plan.add_argument("--profit-target-fraction", type=Decimal)
-    plan.add_argument("--invalidation-feature", required=True)
-    plan.add_argument(
-        "--invalidation-comparison",
-        choices=("lt", "lte", "gt", "gte"),
-        required=True,
-    )
-    plan.add_argument("--invalidation-threshold", type=Decimal, required=True)
-    plan.add_argument("--time-stop-at", type=datetime.fromisoformat, required=True)
-    plan.add_argument("--forced-eod-at", type=datetime.fromisoformat, required=True)
     plan.add_argument("--strategy-version", required=True)
     plan.add_argument("--rationale", required=True)
 
@@ -913,13 +905,6 @@ def main(argv: list[str] | None = None) -> int:
             entry_passport_id=args.entry_passport_id,
             symbol=args.symbol,
             maximum_quantity=args.maximum_quantity,
-            stop_loss_fraction=args.stop_loss_fraction,
-            profit_target_fraction=args.profit_target_fraction,
-            invalidation_feature=args.invalidation_feature,
-            invalidation_comparison=args.invalidation_comparison,
-            invalidation_threshold=args.invalidation_threshold,
-            time_stop_at=args.time_stop_at,
-            forced_eod_at=args.forced_eod_at,
             strategy_version=args.strategy_version,
             rationale=args.rationale,
         )

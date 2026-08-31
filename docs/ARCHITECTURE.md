@@ -86,12 +86,23 @@ position exists, but management continues independently of Terra. The manager ca
 `sell_to_close`; it never improvises an exit or treats missing position management as safe.
 
 Before any entry, a durable position plan must be linked to its sealed `APPROVE`/`REDUCE`
-Passport. The plan has no numerical defaults: the owner must explicitly approve the stop-loss
-fraction, optional profit target, deterministic feature/comparison/threshold for thesis
-invalidation, time-stop timestamp, forced-EOD timestamp, strategy version, rationale, symbol, and
-maximum quantity. A plan cannot exceed Referee quantity authority. Runtime calculations compare
-the executable option bid with the plan and the broker average entry price; structured thesis
-invalidation uses normalized deterministic features and never parses Terra prose.
+Passport and its deterministic selected contract. The initial owner-approved PAPER policy fixes a
+25% executable-bid premium stop, a 35% executable-bid target, a 75-minute fill-anchored time stop,
+and a 3:35 PM ET forced exit. The structural invalidation formula is
+`nearest-sealed-vwap-opening-boundary-v1`: for `LONG_CALL`, freeze the maximum decision-time VWAP,
+opening-range low, or opening-range high that is strictly below the decision SPY price; for
+`LONG_PUT`, freeze the minimum of those levels strictly above it. An empty candidate set blocks
+plan authority. The formula version, all numeric inputs, direction, Referee verdict, symbol,
+strategy version, and rationale are immutable in durable plan state. A plan cannot exceed Referee
+quantity authority.
+
+The 75-minute clock does not exist before a broker fill. On the first reconciled entry-order
+snapshot with nonzero filled quantity, the lifecycle binds one immutable `fill_confirmed_at` using
+Alpaca `filled_at`, or that first snapshot's broker `updated_at` for a partial fill, and persists
+`time_stop_at = fill_confirmed_at + 75 minutes`. Later partial fills cannot move the anchor. Stop and
+target calculations use the current confirmed broker average entry premium and executable option
+bid. Structured thesis invalidation uses normalized deterministic features and never parses Terra
+prose.
 
 An active condition creates and seals a deterministic exit Passport, records `EXIT` Referee
 authority, and reserves a stable client-order identity before the existing coordinator submits a

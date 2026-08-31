@@ -5,13 +5,14 @@ import sqlite3
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from .errors import EvidenceStoreError
 from .models import EventType, InvalidationRule, PositionManagementPlan, RefereeResult
+from .position_policy import validate_initial_position_plan
 
 SCHEMA_STATEMENTS = (
     """
@@ -550,7 +551,8 @@ class Journal:
         )
 
     def register_position_plan(self, plan: PositionManagementPlan) -> bool:
-        if self.passport_state(plan.entry_passport_id) != "SEALED":
+        passport = self.get_passport(plan.entry_passport_id)
+        if passport is None or passport["state"] != "SEALED":
             raise EvidenceStoreError(
                 "Position management plan requires a sealed entry Evidence Passport"
             )
@@ -564,6 +566,10 @@ class Journal:
             raise EvidenceStoreError(
                 "Position plan requires APPROVE/REDUCE authority and cannot exceed its quantity"
             )
+        try:
+            validate_initial_position_plan(plan, passport["payload"], referee)
+        except ValueError as exc:
+            raise EvidenceStoreError(str(exc)) from exc
         now = _iso()
         plan_payload = {
             "plan_id": plan.plan_id,
@@ -581,7 +587,13 @@ class Journal:
                 "comparison": plan.invalidation.comparison,
                 "threshold": str(plan.invalidation.threshold),
             },
-            "time_stop_at": plan.time_stop_at.astimezone(UTC).isoformat(),
+            "invalidation_formula_version": plan.invalidation_formula_version,
+            "invalidation_inputs": [
+                [name, str(value)] for name, value in plan.invalidation_inputs
+            ],
+            "direction": plan.direction,
+            "entry_referee_verdict": plan.entry_referee_verdict,
+            "time_stop_duration_minutes": plan.time_stop_duration_minutes,
             "forced_eod_at": plan.forced_eod_at.astimezone(UTC).isoformat(),
             "strategy_version": plan.strategy_version,
             "rationale": plan.rationale,
@@ -604,6 +616,8 @@ class Journal:
                             {
                                 "broker_flat_verified": False,
                                 "threshold_defaults_used": False,
+                                "fill_confirmed_at": None,
+                                "time_stop_at": None,
                             },
                             sort_keys=True,
                         ),
@@ -671,6 +685,65 @@ class Journal:
             if cursor.rowcount != 1:
                 raise EvidenceStoreError(f"Unknown position plan ID: {plan_id}")
 
+    def bind_position_fill(
+        self,
+        *,
+        plan: PositionManagementPlan,
+        fill_confirmed_at: datetime,
+        filled_quantity: Decimal,
+        average_entry_price: Decimal,
+        anchor_source: str,
+    ) -> tuple[datetime, datetime]:
+        """Bind the immutable time-stop anchor once, at the first confirmed broker fill."""
+        if fill_confirmed_at.tzinfo is None:
+            raise EvidenceStoreError("Confirmed fill timestamp requires a timezone")
+        if filled_quantity <= 0 or average_entry_price <= 0:
+            raise EvidenceStoreError("Confirmed fill quantity and average price must be positive")
+        confirmed = fill_confirmed_at.astimezone(UTC)
+        time_stop_at = confirmed + timedelta(minutes=plan.time_stop_duration_minutes)
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT state, lifecycle_json FROM position_lifecycles
+                WHERE plan_id = ?""",
+                (plan.plan_id,),
+            ).fetchone()
+            if row is None:
+                raise EvidenceStoreError(f"Unknown position plan ID: {plan.plan_id}")
+            lifecycle = json.loads(str(row["lifecycle_json"]))
+            existing_confirmed = lifecycle.get("fill_confirmed_at")
+            existing_stop = lifecycle.get("time_stop_at")
+            if existing_confirmed is not None or existing_stop is not None:
+                if existing_confirmed is None or existing_stop is None:
+                    raise EvidenceStoreError("Position fill anchor is incomplete")
+                return (
+                    datetime.fromisoformat(str(existing_confirmed)).astimezone(UTC),
+                    datetime.fromisoformat(str(existing_stop)).astimezone(UTC),
+                )
+            lifecycle.update(
+                {
+                    "fill_confirmed_at": confirmed.isoformat(),
+                    "time_stop_at": time_stop_at.isoformat(),
+                    "fill_anchor_source": anchor_source,
+                    "initial_confirmed_quantity": str(filled_quantity),
+                    "initial_confirmed_average_entry_price": str(average_entry_price),
+                    "fill_anchor_bound_at": _iso(),
+                }
+            )
+            state = "OPEN" if str(row["state"]) in {"PLANNED", "OPEN"} else str(row["state"])
+            connection.execute(
+                """UPDATE position_lifecycles
+                SET state = ?, updated_at = ?, broker_quantity = ?, lifecycle_json = ?
+                WHERE plan_id = ?""",
+                (
+                    state,
+                    _iso(),
+                    str(filled_quantity),
+                    json.dumps(lifecycle, sort_keys=True),
+                    plan.plan_id,
+                ),
+            )
+        return confirmed, time_stop_at
+
     def broker_order_record(self, client_order_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -702,7 +775,14 @@ class Journal:
                 comparison=str(raw_plan["invalidation"]["comparison"]),
                 threshold=Decimal(str(raw_plan["invalidation"]["threshold"])),
             ),
-            time_stop_at=datetime.fromisoformat(str(raw_plan["time_stop_at"])),
+            invalidation_formula_version=str(raw_plan["invalidation_formula_version"]),
+            invalidation_inputs=tuple(
+                (str(name), Decimal(str(value)))
+                for name, value in raw_plan["invalidation_inputs"]
+            ),
+            direction=str(raw_plan["direction"]),
+            entry_referee_verdict=str(raw_plan["entry_referee_verdict"]),
+            time_stop_duration_minutes=int(raw_plan["time_stop_duration_minutes"]),
             forced_eod_at=datetime.fromisoformat(str(raw_plan["forced_eod_at"])),
             strategy_version=str(raw_plan["strategy_version"]),
             rationale=str(raw_plan["rationale"]),

@@ -30,6 +30,8 @@ class ExitEvaluation:
     stop_bid: Decimal
     target_bid: Decimal | None
     invalidation_value: Decimal | None
+    fill_confirmed_at: datetime
+    time_stop_at: datetime
     evaluated_at: datetime
 
 
@@ -114,6 +116,24 @@ class DeterministicPositionManager:
                 state="BROKER_POSITION_MISMATCH",
             )
 
+        timing = self._fill_timing(
+            plan,
+            lifecycle,
+            position,
+            observed_at=collection.snapshot.decision_at,
+        )
+        if timing is None:
+            return self._critical(
+                component="position_fill_anchor",
+                message=(
+                    "A broker position exists but its entry fill timestamp is not durably "
+                    "confirmed."
+                ),
+                state="POSITION_FILL_UNCONFIRMED",
+            )
+        fill_confirmed_at, time_stop_at = timing
+        self.journal.resolve_incidents("position_fill_anchor")
+
         self.journal.update_position_lifecycle(
             plan_id=plan.plan_id,
             state=(
@@ -122,7 +142,11 @@ class DeterministicPositionManager:
                 else str(lifecycle["state"])
             ),
             broker_quantity=position.quantity,
-            payload={"broker_position_verified": True},
+            payload={
+                "broker_position_verified": True,
+                "confirmed_average_entry_price": str(position.average_entry_price),
+                "confirmed_broker_quantity": str(position.quantity),
+            },
         )
         self.journal.resolve_incidents("position_management_plan")
         self.journal.resolve_incidents("position_management_position")
@@ -171,7 +195,13 @@ class DeterministicPositionManager:
                 state="BROKER_RECONCILIATION_REQUIRED",
             )
 
-        evaluation = self._evaluate(plan, position, collection)
+        evaluation = self._evaluate(
+            plan,
+            position,
+            collection,
+            fill_confirmed_at=fill_confirmed_at,
+            time_stop_at=time_stop_at,
+        )
         invalidation_degraded = evaluation.invalidation_value is None
         if invalidation_degraded:
             self.journal.open_incident(
@@ -201,6 +231,8 @@ class DeterministicPositionManager:
                     "stop_bid": evaluation.stop_bid,
                     "target_bid": evaluation.target_bid,
                     "invalidation_value": evaluation.invalidation_value,
+                    "fill_confirmed_at": evaluation.fill_confirmed_at,
+                    "time_stop_at": evaluation.time_stop_at,
                     "ai_dependency": False,
                     "thesis_invalidation_available": not invalidation_degraded,
                 },
@@ -370,6 +402,9 @@ class DeterministicPositionManager:
         plan: PositionManagementPlan,
         position: PositionSnapshot,
         collection: LiveEvidenceCollection,
+        *,
+        fill_confirmed_at: datetime,
+        time_stop_at: datetime,
     ) -> ExitEvaluation:
         evaluated_at = collection.snapshot.decision_at.astimezone(UTC)
         quote = next(
@@ -409,7 +444,7 @@ class DeterministicPositionManager:
             reason = ExitReason.THESIS_INVALIDATION
         elif target_bid is not None and option_bid is not None and option_bid >= target_bid:
             reason = ExitReason.PROFIT_TARGET
-        elif evaluated_at >= plan.time_stop_at.astimezone(UTC):
+        elif evaluated_at >= time_stop_at.astimezone(UTC):
             reason = ExitReason.TIME_STOP
         return ExitEvaluation(
             reason=reason,
@@ -417,7 +452,80 @@ class DeterministicPositionManager:
             stop_bid=stop_bid,
             target_bid=target_bid,
             invalidation_value=invalidation_value,
+            fill_confirmed_at=fill_confirmed_at,
+            time_stop_at=time_stop_at,
             evaluated_at=evaluated_at,
+        )
+
+    def _fill_timing(
+        self,
+        plan: PositionManagementPlan,
+        lifecycle: dict[str, object],
+        position: PositionSnapshot,
+        *,
+        observed_at: datetime,
+    ) -> tuple[datetime, datetime] | None:
+        if observed_at.tzinfo is None:
+            return None
+        checked_at = observed_at.astimezone(UTC)
+        durable = lifecycle["lifecycle"]
+        if not isinstance(durable, dict):
+            return None
+        confirmed_raw = durable.get("fill_confirmed_at")
+        stop_raw = durable.get("time_stop_at")
+        if confirmed_raw is not None or stop_raw is not None:
+            if confirmed_raw is None or stop_raw is None:
+                return None
+            try:
+                confirmed_value = datetime.fromisoformat(str(confirmed_raw))
+                stop_value = datetime.fromisoformat(str(stop_raw))
+            except ValueError:
+                return None
+            if confirmed_value.tzinfo is None or stop_value.tzinfo is None:
+                return None
+            confirmed = confirmed_value.astimezone(UTC)
+            stop_at = stop_value.astimezone(UTC)
+            expected_stop = confirmed + timedelta(minutes=plan.time_stop_duration_minutes)
+            if stop_at != expected_stop:
+                return None
+            return confirmed, stop_at
+
+        fills: list[tuple[datetime, Decimal, str]] = []
+        for record in self.journal.broker_order_records():
+            if str(record["passport_id"]) != plan.entry_passport_id:
+                continue
+            payload = record["payload"]
+            intent = payload.get("intent", {})
+            broker_order = payload.get("broker_order", {})
+            if (
+                not isinstance(intent, dict)
+                or not isinstance(broker_order, dict)
+                or intent.get("position_intent") != "buy_to_open"
+                or str(intent.get("symbol", "")) != plan.symbol
+            ):
+                continue
+            try:
+                filled_quantity = Decimal(str(broker_order["filled_quantity"]))
+                observed = broker_order.get("filled_at") or broker_order["updated_at"]
+                fill_value = datetime.fromisoformat(str(observed))
+            except (KeyError, InvalidOperation, ValueError):
+                continue
+            if fill_value.tzinfo is None:
+                continue
+            fill_at = fill_value.astimezone(UTC)
+            if fill_at > checked_at:
+                continue
+            if filled_quantity > 0:
+                fills.append((fill_at, filled_quantity, str(record["client_order_id"])))
+        if len(fills) != 1:
+            return None
+        fill_at, filled_quantity, client_order_id = fills[0]
+        return self.journal.bind_position_fill(
+            plan=plan,
+            fill_confirmed_at=fill_at,
+            filled_quantity=filled_quantity,
+            average_entry_price=position.average_entry_price,
+            anchor_source=f"ALPACA_ORDER:{client_order_id}",
         )
 
     def _exit_health(self, collection: LiveEvidenceCollection, quote_at: datetime) -> HealthReport:
@@ -507,6 +615,8 @@ class DeterministicPositionManager:
             "stop_bid": evaluation.stop_bid,
             "target_bid": evaluation.target_bid,
             "invalidation_value": evaluation.invalidation_value,
+            "fill_confirmed_at": evaluation.fill_confirmed_at,
+            "time_stop_at": evaluation.time_stop_at,
             "client_order_id": client_order_id,
             "ai_dependency": False,
             "broker_flat_required": True,

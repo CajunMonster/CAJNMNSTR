@@ -79,7 +79,11 @@ class PositionManagementPlan:
     stop_loss_fraction: Decimal
     profit_target_fraction: Decimal | None
     invalidation: InvalidationRule
-    time_stop_at: datetime
+    invalidation_formula_version: str
+    invalidation_inputs: tuple[tuple[str, Decimal], ...]
+    direction: str
+    entry_referee_verdict: str
+    time_stop_duration_minutes: int
     forced_eod_at: datetime
     strategy_version: str
     rationale: str
@@ -104,14 +108,19 @@ class PositionManagementPlan:
             or self.profit_target_fraction <= 0
         ):
             raise ValueError("Profit-target fraction must be positive when supplied")
-        if self.time_stop_at.tzinfo is None or self.forced_eod_at.tzinfo is None:
-            raise ValueError("Time-stop and forced-EOD timestamps require timezones")
-        time_stop_local = self.time_stop_at.astimezone(NEW_YORK)
+        if not self.invalidation_formula_version.strip() or not self.invalidation_inputs:
+            raise ValueError("Structural invalidation formula and inputs are required")
+        if any(not value.is_finite() or value <= 0 for _, value in self.invalidation_inputs):
+            raise ValueError("Structural invalidation inputs must be finite and positive")
+        if self.direction not in {"LONG_CALL", "LONG_PUT"}:
+            raise ValueError("Position plan direction must be LONG_CALL or LONG_PUT")
+        if self.entry_referee_verdict not in {"APPROVE", "REDUCE"}:
+            raise ValueError("Position plan requires APPROVE or REDUCE entry authority")
+        if self.time_stop_duration_minutes <= 0:
+            raise ValueError("Time-stop duration must be positive")
+        if self.forced_eod_at.tzinfo is None:
+            raise ValueError("Forced-EOD timestamp requires a timezone")
         forced_eod_local = self.forced_eod_at.astimezone(NEW_YORK)
-        if time_stop_local.date() != forced_eod_local.date():
-            raise ValueError("Time-stop and forced-EOD timestamps must be for one session")
-        if self.time_stop_at > self.forced_eod_at:
-            raise ValueError("Time stop cannot occur after forced EOD")
         if not time(9, 30) <= forced_eod_local.time() < time(16, 0):
             raise ValueError("Forced EOD must be inside the regular session and before close")
         if not self.strategy_version.strip() or not self.rationale.strip():
@@ -298,6 +307,7 @@ class BrokerOrderSnapshot:
     limit_price: Decimal | None
     submitted_at: datetime | None
     updated_at: datetime
+    filled_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

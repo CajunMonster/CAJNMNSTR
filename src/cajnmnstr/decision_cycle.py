@@ -399,6 +399,18 @@ class EvidenceCalculator:
                 opening_state,
                 "state",
             )
+            add_feature(
+                "feature:opening_range_high",
+                "opening_range_high",
+                opening_high,
+                "USD",
+            )
+            add_feature(
+                "feature:opening_range_low",
+                "opening_range_low",
+                opening_low,
+                "USD",
+            )
 
             day_high = max(bar.high for bar in bars)
             day_low = min(bar.low for bar in bars)

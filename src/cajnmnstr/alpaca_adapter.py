@@ -341,4 +341,5 @@ class AlpacaAdapter:
             limit_price=_decimal(order.limit_price) if order.limit_price is not None else None,
             submitted_at=order.submitted_at,
             updated_at=order.updated_at,
+            filled_at=getattr(order, "filled_at", None),
         )

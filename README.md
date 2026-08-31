@@ -145,10 +145,13 @@ The position-management mode is separately armed and confirmed:
 This mode still rejects enabled new-entry authority. It may submit only a deterministic PAPER
 `sell_to_close` for a verified existing position whose immutable exit plan was registered before
 entry. Use `cajnmnstr register-position-plan --help` to review the required owner-supplied fields.
-There are no default stop, target, invalidation, time-stop, or forced-EOD values. Registration
-requires a sealed `APPROVE`/`REDUCE` Passport, explicit confirmation, strategy version, and
-rationale. Submission is not closure: the lifecycle remains pending until reconciliation proves
-broker quantity is zero.
+The owner-approved initial competition policy is locked at a 25% executable-bid premium stop, a
+35% executable-bid profit target, a 75-minute timer from the first confirmed broker fill, and a
+3:35 PM ET forced exit. Thesis invalidation freezes the nearest decision-time VWAP/opening-range
+boundary strictly beyond the SPY decision price on the invalidating side. Missing valid structure
+blocks registration. Registration also requires a sealed `APPROVE`/`REDUCE` Passport, the selected
+contract, explicit confirmation, strategy version, and rationale. Submission is not closure: the
+lifecycle remains pending until reconciliation proves broker quantity is zero.
 
 The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,

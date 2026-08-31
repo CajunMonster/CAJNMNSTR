@@ -23,13 +23,12 @@ from cajnmnstr.models import (
     BrokerOrderSnapshot,
     EventType,
     HealthState,
-    InvalidationRule,
     OrderCandidate,
     OrderIntent,
-    PositionManagementPlan,
     PositionSnapshot,
     RefereeVerdict,
 )
+from cajnmnstr.position_policy import build_initial_position_plan
 from cajnmnstr.services import (
     BrokerReconciler,
     DeterministicReferee,
@@ -141,6 +140,23 @@ def candidate(
     )
 
 
+def entry_passport_payload() -> dict[str, object]:
+    return {
+        "evidence_snapshot": {
+            "decision_at": "2026-08-31T15:00:00+00:00",
+            "features": {
+                "underlying_price": "540",
+                "vwap": "539",
+                "opening_range_low": "538",
+                "opening_range_high": "541",
+            },
+        },
+        "terra": {"proposal": {"direction": "LONG_CALL"}},
+        "option_selection": {"candidate": {"symbol": "SPY260918C00540000"}},
+        "broker_submission_allowed": False,
+    }
+
+
 def authority_fixture(
     tmp_path: Path,
     *,
@@ -163,9 +179,10 @@ def authority_fixture(
     )
     journal = Journal(configured.journal_path)
     journal.initialize()
-    journal.create_passport("passport-001", {"symbol": "SPY"})
-    journal.seal_passport("passport-001", {"symbol": "SPY", "sealed": True})
-    DeterministicReferee(journal).issue(
+    payload = entry_passport_payload()
+    journal.create_passport("passport-001", payload)
+    journal.seal_passport("passport-001", payload)
+    referee = DeterministicReferee(journal).issue(
         passport_id="passport-001",
         verdict=verdict,
         reason_code=referee_reason or f"MOCK_{verdict.value}",
@@ -174,18 +191,15 @@ def authority_fixture(
     )
     if register_entry_plan and verdict in {RefereeVerdict.APPROVE, RefereeVerdict.REDUCE}:
         journal.register_position_plan(
-            PositionManagementPlan(
+            build_initial_position_plan(
+                payload,
+                referee,
                 plan_id="cajnmnstr-plan-fixture-001",
                 entry_passport_id="passport-001",
                 symbol="SPY260918C00540000",
                 maximum_quantity=int(max_quantity or 1),
-                stop_loss_fraction=Decimal("0.20"),
-                profit_target_fraction=Decimal("0.30"),
-                invalidation=InvalidationRule("return_5m", "lt", Decimal("-0.01")),
-                time_stop_at=datetime(2026, 8, 31, 19, 0, tzinfo=UTC),
-                forced_eod_at=datetime(2026, 8, 31, 19, 45, tzinfo=UTC),
                 strategy_version="fixture-v1",
-                rationale="Test-only explicit values; no production defaults.",
+                rationale="Test-only owner-approved initial policy.",
             )
         )
     resolved_positions = positions
