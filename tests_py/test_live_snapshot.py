@@ -255,7 +255,17 @@ def collect(tmp_path: Path, reader: FakeLiveReader | None = None):
     app = app_settings(tmp_path)
     fake = reader or FakeLiveReader()
     journal = Journal(app.journal_path)
-    return app, fake, journal, LiveEvidenceCollector(app, journal, fake).collect()
+    return (
+        app,
+        fake,
+        journal,
+        LiveEvidenceCollector(
+            app,
+            journal,
+            fake,
+            now=lambda: fake.decision_at,
+        ).collect(),
+    )
 
 
 def test_live_source_normalizes_to_the_replay_snapshot_contract(tmp_path: Path) -> None:
@@ -338,6 +348,30 @@ def test_stale_sip_and_stale_opra_fail_actionable_freshness(tmp_path: Path) -> N
     _, _, _, opra = collect(tmp_path / "opra", opra_reader)
     assert "SPY_OPRA_OPTIONS" in opra.snapshot.stale_sources
     assert opra.snapshot.actionable_fresh is False
+
+
+def test_snapshot_timestamp_is_captured_after_market_reads(tmp_path: Path) -> None:
+    reader = FakeLiveReader()
+    clock_at = reader.decision_at
+    reader.quote = replace(reader.quote, observed_at=clock_at + timedelta(milliseconds=100))
+    reader.chain = [
+        replace(item, quote_at=clock_at + timedelta(milliseconds=800))
+        for item in reader.chain
+    ]
+    captured_at = clock_at + timedelta(seconds=1)
+    app = app_settings(tmp_path)
+    collection = LiveEvidenceCollector(
+        app,
+        Journal(app.journal_path),
+        reader,
+        now=lambda: captured_at,
+    ).collect()
+
+    assert collection.snapshot.decision_at == captured_at
+    assert collection.snapshot.actionable_fresh is True
+    assert collection.snapshot.stale_sources == ()
+    assert collection.snapshot.source_provenance["market_clock_at"] == clock_at.isoformat()
+    assert collection.snapshot.source_provenance["snapshot_captured_at"] == captured_at.isoformat()
 
 
 def test_closed_market_path_blocks_and_runner_never_submits(tmp_path: Path) -> None:

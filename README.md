@@ -122,6 +122,20 @@ normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and sel
 Passport, updates the dashboard, and stops at operator review. `verify-terra` and
 `replay-cycle --live-terra` send only checked-in replay evidence to OpenAI.
 
+The prepared continuous read-only loop is deliberately not enabled by configuration. After owner
+review, it can be started explicitly with:
+
+```powershell
+.venv\Scripts\cajnmnstr.exe live-loop --confirm PAPER_READ_ONLY_LOOP
+```
+
+It monitors once per minute, invokes Terra at most once for each new completed five-minute bar,
+continues after `NO_TRADE` / `ABSTAIN` / `BLOCK`, and pauses at
+`READY_FOR_OPERATOR_REVIEW`. It has no execution-coordinator dependency and always reports
+`broker_submission_allowed=false`. A verified open position requires the separately approved
+deterministic position-management handler; absence of that handler raises a persistent critical
+incident and blocks new-entry evaluation.
+
 The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
 `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED`, and `CAJNMNSTR_BROKER_LOCK`; conflicting legacy and

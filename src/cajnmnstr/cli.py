@@ -19,7 +19,16 @@ from .decision_cycle import (
 )
 from .health import HealthSupervisor, freshness_health
 from .journal import Journal
-from .live_snapshot import LiveDecisionRunner, outcome_summary
+from .live_loop import (
+    DEFAULT_MONITOR_CADENCE_SECONDS,
+    ContinuousDecisionLoop,
+)
+from .live_snapshot import (
+    LIVE_OPTION_MAX_AGE,
+    LIVE_QUOTE_MAX_AGE,
+    LiveDecisionRunner,
+    outcome_summary,
+)
 from .models import EventType, HealthState
 from .option_chain import parse_option_chain_payload
 
@@ -195,6 +204,39 @@ def _live_decision(
     return 0 if outcome.health.state is HealthState.HEALTHY else 2
 
 
+def _live_loop(
+    settings: Settings,
+    *,
+    confirmation: str,
+    cadence_seconds: int,
+    max_cycles: int | None,
+    dashboard_path: Path,
+    health_path: Path,
+) -> int:
+    """Run a read-only regular-session monitor with no execution dependency."""
+    if not settings.ai_configured:
+        raise ValueError("Terra must be configured for the continuous decision loop")
+    runner = LiveDecisionRunner(
+        settings,
+        Journal(settings.journal_path),
+        AlpacaAdapter(settings),
+        OpenAIResponsesAdapter(settings),
+    )
+    result = ContinuousDecisionLoop(
+        settings,
+        Journal(settings.journal_path),
+        runner,
+    ).run(
+        confirmation=confirmation,
+        cadence_seconds=cadence_seconds,
+        max_cycles=max_cycles,
+        dashboard_path=dashboard_path,
+        health_path=health_path,
+    )
+    print(_json(result.to_dict()))
+    return 0
+
+
 def _mcp_config_check(path: Path) -> int:
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".toml":
@@ -328,12 +370,13 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
             strike_lte=strike_lte,
         )
 
-        maximum_quote_age = timedelta(minutes=5) if clock.is_open else timedelta(hours=24)
+        quote_maximum_age = LIVE_QUOTE_MAX_AGE if clock.is_open else timedelta(hours=24)
+        option_maximum_age = LIVE_OPTION_MAX_AGE if clock.is_open else timedelta(hours=24)
         checked_at = datetime.now(UTC)
         quote_health = freshness_health(
             component="spy_quote",
             observed_at=quote.observed_at,
-            maximum_age=maximum_quote_age,
+            maximum_age=quote_maximum_age,
             now=checked_at,
         )
         option_quote_times = [item.quote_at for item in chain if item.quote_at is not None]
@@ -341,7 +384,7 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
         option_health = freshness_health(
             component="spy_option_chain",
             observed_at=newest_option_quote,
-            maximum_age=maximum_quote_age,
+            maximum_age=option_maximum_age,
             now=checked_at,
         )
 
@@ -469,7 +512,8 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
             "spy_quote": asdict(quote),
             "spy_quote_health": quote_health.to_dict(),
             "spy_option_health": option_health.to_dict(),
-            "quote_maximum_age_seconds": maximum_quote_age.total_seconds(),
+            "quote_maximum_age_seconds": quote_maximum_age.total_seconds(),
+            "option_maximum_age_seconds": option_maximum_age.total_seconds(),
             "option_contract_count": len(contracts),
             "option_contract_metadata_count": contract_metadata_count,
             "option_chain_coverage": coverage,
@@ -655,6 +699,31 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("public/health.json"),
     )
 
+    live_loop = subparsers.add_parser(
+        "live-loop",
+        help=(
+            "Continuously monitor PAPER health and evaluate once per completed "
+            "five-minute evidence epoch; never submit"
+        ),
+    )
+    live_loop.add_argument("--confirm", required=True)
+    live_loop.add_argument(
+        "--cadence-seconds",
+        type=int,
+        default=DEFAULT_MONITOR_CADENCE_SECONDS,
+    )
+    live_loop.add_argument("--max-cycles", type=int)
+    live_loop.add_argument(
+        "--dashboard-path",
+        type=Path,
+        default=Path("public/dashboard-state.json"),
+    )
+    live_loop.add_argument(
+        "--health-path",
+        type=Path,
+        default=Path("public/health.json"),
+    )
+
     mcp = subparsers.add_parser("mcp-config-check", help="Validate the read-only MCP example")
     mcp.add_argument(
         "--path", type=Path, default=Path("config/codex-mcp.example.toml")
@@ -683,6 +752,15 @@ def main(argv: list[str] | None = None) -> int:
         return _replay_cycle(settings, args.path, live_terra=args.live_terra)
     if args.command == "live-decision":
         return _live_decision(settings, args.dashboard_path, args.health_path)
+    if args.command == "live-loop":
+        return _live_loop(
+            settings,
+            confirmation=args.confirm,
+            cadence_seconds=args.cadence_seconds,
+            max_cycles=args.max_cycles,
+            dashboard_path=args.dashboard_path,
+            health_path=args.health_path,
+        )
     if args.command == "mcp-config-check":
         return _mcp_config_check(args.path)
     if args.command == "verify-alpaca":

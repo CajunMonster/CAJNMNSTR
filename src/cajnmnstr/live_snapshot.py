@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
@@ -150,11 +151,14 @@ class LiveEvidenceCollector:
         settings: Settings,
         journal: Journal,
         reader: LiveEvidenceReader,
+        *,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         self.settings = settings
         self.journal = journal
         self.reader = reader
         self.calculator = EvidenceCalculator()
+        self._now = now or (lambda: datetime.now(UTC))
 
     def collect(self) -> LiveEvidenceCollection:
         self.settings.validate_static_safety()
@@ -168,30 +172,37 @@ class LiveEvidenceCollector:
         open_orders = self.reader.list_open_orders()
         reconciliation = BrokerReconciler(self.journal, self.reader).reconcile()
         clock = self.reader.get_clock()
-        decision_at = clock.timestamp.astimezone(UTC)
+        clock_at = clock.timestamp.astimezone(UTC)
+        query_end_at = max(self._now().astimezone(UTC), clock_at)
         quote = self.reader.get_spy_quote(feed="sip")
         bars = self.reader.get_spy_bars(
-            start=decision_at - timedelta(days=10),
-            end=decision_at,
+            start=query_end_at - timedelta(days=10),
+            end=query_end_at,
             timeframe_minutes=5,
             feed="sip",
         )
         daily_bars = self.reader.get_spy_daily_bars(
-            start=decision_at - timedelta(days=20),
-            end=decision_at,
+            start=query_end_at - timedelta(days=20),
+            end=query_end_at,
             feed="sip",
         )
-        completed_bars = _regular_completed_bars(bars, decision_at=decision_at)
-        session_date = (
-            None if not completed_bars else completed_bars[-1].timestamp.astimezone(NEW_YORK).date()
-        )
-        previous_close = _previous_close(daily_bars, session_date)
-        request_date = decision_at.astimezone(NEW_YORK).date()
+        request_date = query_end_at.astimezone(NEW_YORK).date()
         option_chain = self.reader.get_option_chain(
             expiration_gte=request_date + timedelta(days=7),
             expiration_lte=request_date + timedelta(days=21),
             feed="opra",
         )
+
+        # The Evidence Snapshot timestamp is the completion time of the read set, not the
+        # earlier market-clock response. Market-data timestamps can legitimately be newer than
+        # that first response by milliseconds; using the pre-read clock falsely classified fresh
+        # SIP and OPRA observations as future/stale.
+        decision_at = max(self._now().astimezone(UTC), clock_at)
+        completed_bars = _regular_completed_bars(bars, decision_at=decision_at)
+        session_date = (
+            None if not completed_bars else completed_bars[-1].timestamp.astimezone(NEW_YORK).date()
+        )
+        previous_close = _previous_close(daily_bars, session_date)
 
         latest_bar_completion = (
             None if not completed_bars else completed_bars[-1].timestamp + FIVE_MINUTES
@@ -233,6 +244,8 @@ class LiveEvidenceCollector:
             "paper_endpoint": self.settings.alpaca_api_base_url,
             "stock_feed": "sip",
             "options_feed": "opra",
+            "market_clock_at": _iso(clock_at),
+            "snapshot_captured_at": _iso(decision_at),
             "spy_quote_at": _iso(quote.observed_at),
             "latest_completed_bar_at": _iso(latest_bar_completion),
             "latest_option_quote_at": _iso(latest_option_at),
@@ -803,6 +816,20 @@ class LiveDecisionRunner:
         health_path: Path | None = None,
     ) -> LiveDecisionOutcome:
         collection = self.collector.collect()
+        return self.run_collection(
+            collection,
+            dashboard_path=dashboard_path,
+            health_path=health_path,
+        )
+
+    def run_collection(
+        self,
+        collection: LiveEvidenceCollection,
+        *,
+        dashboard_path: Path | None = None,
+        health_path: Path | None = None,
+    ) -> LiveDecisionOutcome:
+        """Process one previously collected read-only snapshot without re-reading Alpaca."""
         decision = self.pipeline.run_snapshot(
             collection.snapshot,
             instructions=TERRA_LIVE_INSTRUCTIONS,

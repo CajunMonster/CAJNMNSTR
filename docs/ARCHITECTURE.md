@@ -60,6 +60,10 @@ SIP quote age over 30 seconds, OPRA quote age over 30 seconds, insufficient comp
 invalid evidence makes the snapshot non-actionable. The command has no execution-coordinator
 dependency and always records `broker_submission_allowed=false`.
 
+Open-market readiness and the decision snapshot both use the same 30-second SIP/OPRA freshness
+policy. The snapshot timestamp is captured after the authenticated read set completes; the earlier
+market-clock response is retained as provenance but is not used as the post-read freshness clock.
+
 From the project root, Monday's single read-only operator path is:
 
 ```powershell
@@ -70,6 +74,15 @@ Run it only after enough regular-session five-minute bars exist. A safe result r
 fresh SIP/OPRA, successful reconciliation, a sealed Passport, and
 `READY_FOR_OPERATOR_REVIEW`; even then entry authority remains disabled and the command stops
 before broker submission.
+
+The optional continuous PAPER read-only controller polls component and broker health every 60
+seconds and defines a decision epoch by the newest completed regular-session five-minute bar. It
+invokes Terra once per new actionable epoch, journals non-actionable evidence and `NO_TRADE` /
+`ABSTAIN` / `BLOCK`, and pauses when a candidate reaches `READY_FOR_OPERATOR_REVIEW`. The loop
+requires the literal `PAPER_READ_ONLY_LOOP` operator confirmation, rejects enabled entry
+authority, and has no broker-submission path. If a verified position exists, new-entry evaluation
+stops and the loop requires an explicitly attached deterministic position-management handler; it
+never improvises an exit or treats missing position management as safe.
 
 ## Terra proposal boundary
 
