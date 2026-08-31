@@ -16,7 +16,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "pnpm run build && node --test tests/rendered-html.test.mjs tests/public-demo-boundary.test.mjs",
+    "test": "pnpm run build && node --test tests/rendered-html.test.mjs tests/public-demo-boundary.test.mjs tests/dashboard-functional-qa.test.mjs",
     "test:python": "uv run pytest",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "lint:python": "uv run ruff check src tests_py",

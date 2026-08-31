@@ -127,7 +127,10 @@ function signedMoney(value: number | null): string {
   return `${value > 0 ? "+" : ""}${currency.format(value)}`;
 }
 
-function timestamp(value: string): string {
+function timestamp(value: string | null | undefined): string {
+  if (!value) return "TIME UNAVAILABLE";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "TIME UNAVAILABLE";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "2-digit",
@@ -136,7 +139,7 @@ function timestamp(value: string): string {
     second: "2-digit",
     timeZone: "America/Chicago",
     timeZoneName: "short",
-  }).format(new Date(value));
+  }).format(parsed);
 }
 
 function FrameHardware() {
@@ -172,6 +175,12 @@ function MetalPanel({ kicker, title, status, className = "", children }: {
 function StatusCluster({ state }: { state: DashboardState }) {
   return (
     <div className="status-cluster" aria-label="Verified runtime status">
+      {state.connections.length === 0 && (
+        <div className="status-node" title="No verified runtime connection state is available">
+          <span className="status-lamp unknown" aria-hidden="true" />
+          <div><small>RUNTIME</small><strong>UNAVAILABLE</strong></div>
+        </div>
+      )}
       {state.connections.map((item) => (
         <div className="status-node" key={item.id} title={item.detail}>
           <span className={`status-lamp ${item.state}`} aria-hidden="true" />
@@ -258,9 +267,11 @@ function OptionsPanel({ state }: { state: DashboardState }) {
         <div><span>SKEW</span><strong>{state.options.skew === null ? "N/A" : `${state.options.skew.toFixed(2)}%`}</strong></div>
       </div>
       <div className="iv-surface" aria-label="Option implied volatility comparison">
-        {state.options.surface.map((item) => (
-          <div key={item.label}><i style={{ height: `${Math.max(18, (item.value / maximum) * 100)}%` }} /><span>{item.label}</span></div>
-        ))}
+        {state.options.surface.length === 0
+          ? <p className="empty-state">NO SANITIZED OPTION SURFACE AVAILABLE</p>
+          : state.options.surface.map((item) => (
+            <div key={item.label}><i style={{ height: `${Math.max(18, (item.value / maximum) * 100)}%` }} /><span>{item.label}</span></div>
+          ))}
       </div>
       <footer className="data-footer"><span>{state.options.skew_reason}</span><span>UPDATED {timestamp(state.options.last_update)}</span></footer>
     </MetalPanel>
@@ -382,19 +393,33 @@ function ActivityPanel({ state }: { state: DashboardState }) {
   return (
     <MetalPanel kicker="DURABLE JOURNAL" title="RECENT ACTIVITY" status={`${state.mode} EVENTS`} className="lower-panel activity-panel">
       <div className="activity-list">
+        {state.activity.length === 0 && <p className="empty-state">NO DURABLE JOURNAL EVENTS AVAILABLE</p>}
         {state.activity.slice(0, 5).map((item) => (
-          <div key={`${item.time}-${item.kind}`}><time>{item.time}</time><b>{item.kind}</b><p>{item.text}</p><span>{item.mode}</span></div>
+          <div key={`${item.time}-${item.kind}`}><time title="Market event time, Eastern Time">{item.time} ET</time><b>{item.kind}</b><p>{item.text}</p><span>{item.mode}</span></div>
         ))}
       </div>
     </MetalPanel>
   );
 }
 
-function HealthPanel({ state, showAuthority = false }: { state: DashboardState; showAuthority?: boolean }) {
+function HealthPanel({ state, showAuthority = false, showConnections = false }: { state: DashboardState; showAuthority?: boolean; showConnections?: boolean }) {
   return (
     <MetalPanel kicker="FAIL-LOUD MONITORING" title="SYSTEM HEALTH" status={state.operational_state} className="lower-panel health-panel">
       {showAuthority && <AuthorityRack state={state} />}
+      {showConnections && (
+        <div className="connection-grid" aria-label="Runtime source status">
+          {state.connections.length === 0 && <p className="empty-state">NO VERIFIED CONNECTION STATE AVAILABLE</p>}
+          {state.connections.map((item) => (
+            <div key={item.id} title={item.detail}>
+              <span className={`status-lamp ${item.state}`} aria-hidden="true" />
+              <p><small>{item.label}</small><strong>{item.value}</strong></p>
+              <b>{item.state}</b>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="health-list">
+        {state.systems.length === 0 && <p className="empty-state">NO COMPONENT HEALTH REPORT AVAILABLE</p>}
         {state.systems.map((item) => (
           <div key={item.id}><span className={`health-dot state-${item.state.toLowerCase()}`} /><p><strong>{item.label}</strong><small>{item.detail}</small></p><b>{item.state}</b></div>
         ))}
@@ -419,7 +444,18 @@ function EvidenceView({ state }: { state: DashboardState }) {
       <MetalPanel kicker={`${state.mode} EVIDENCE PASSPORT`} title={state.passport.id} status={state.passport.sealed ? "SEALED" : "OPEN"} className="evidence-overview">
         <div className="evidence-columns">
           <section><span>THESIS</span><p>{state.proposal.thesis}</p><span>COUNTERARGUMENT</span><p>{state.proposal.counterargument}</p><span>STRUCTURED INVALIDATION</span><p>{state.proposal.invalidation}</p></section>
-          <section className="passport-facts"><div><span>FIXTURE</span><strong>{state.passport.fixture_id}</strong></div><div><span>DIRECTION</span><strong>{state.proposal.direction}</strong></div><div><span>UNCERTAINTY</span><strong>{state.proposal.uncertainty}</strong></div><div><span>VERDICT</span><strong>{state.decision.verdict}</strong></div><div><span>AUTHORITY</span><strong>{state.decision.state}</strong></div><div><span>BROKER</span><strong>NOT SUBMITTED</strong></div></section>
+          <section className="passport-facts">
+            <div><span>SNAPSHOT ID</span><strong>{state.passport.fixture_id || "UNAVAILABLE"}</strong></div>
+            <div><span>SOURCE</span><strong>{state.passport.source || "UNAVAILABLE"}</strong></div>
+            <div><span>MODE / TRUTH</span><strong>{state.mode} · {state.truth_label}</strong></div>
+            <div><span>DIRECTION</span><strong>{state.proposal.direction}</strong></div>
+            <div><span>UNCERTAINTY</span><strong>{state.proposal.uncertainty}</strong></div>
+            <div><span>VERDICT</span><strong>{state.decision.verdict}</strong></div>
+            <div><span>AUTHORITY</span><strong>{state.decision.state}</strong></div>
+            <div><span>BROKER</span><strong>NOT SUBMITTED</strong></div>
+            <div><span>SPY PROVENANCE</span><strong>{state.market.feed} · {state.market.data_state}<small>{timestamp(state.market.last_update)}</small></strong></div>
+            <div><span>OPTIONS PROVENANCE</span><strong>{state.options.feed} · {state.options.status}<small>{timestamp(state.options.last_update)}</small></strong></div>
+          </section>
         </div>
       </MetalPanel>
     </section>
@@ -427,20 +463,20 @@ function EvidenceView({ state }: { state: DashboardState }) {
 }
 
 function JournalView({ state }: { state: DashboardState }) {
-  return <section className="detail-view"><ActivityPanel state={state} /></section>;
+  return <section className="detail-view journal-view"><ExecutionPanel state={state} /><ActivityPanel state={state} /></section>;
 }
 
 function SystemView({ state }: { state: DashboardState }) {
-  return <section className="detail-view"><HealthPanel state={state} showAuthority /></section>;
+  return <section className="detail-view"><HealthPanel state={state} showAuthority showConnections /></section>;
 }
 
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewName>("dashboard");
   const [state, setState] = useState<DashboardState>(initialDashboardState as DashboardState);
-  const [clock, setClock] = useState("--:--:--");
+  const [clock, setClock] = useState("--:--:-- --");
 
   useEffect(() => {
-    const refreshClock = () => setClock(new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Chicago" }).format(new Date()));
+    const refreshClock = () => setClock(new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "America/Chicago" }).format(new Date()));
     refreshClock();
     const clockTimer = window.setInterval(refreshClock, 1000);
     const refreshState = async () => {
@@ -469,7 +505,7 @@ export default function Home() {
           <div className="account-head"><span>PAPER EQUITY · LAST VERIFIED</span><strong>{money(state.account.equity)}</strong><div><small>BUYING POWER</small><b>{money(state.account.buying_power)}</b></div><time>{timestamp(state.account.as_of)}</time></div>
         </header>
 
-        <div className="truth-banner" role="status"><strong>{state.operational_state}</strong><span>{state.truth_label}</span><b>{clock} CT</b></div>
+        <div className="truth-banner" role="status"><strong>{state.operational_state}</strong><span>{state.truth_label}</span><div className="operator-clock" aria-label="Operator clock, Central Time"><small>OPERATOR CLOCK</small><time>{clock} CT</time></div></div>
 
         {activeView === "dashboard" && <CommandView state={state} openEvidence={() => setActiveView("evidence")} />}
         {activeView === "evidence" && <EvidenceView state={state} />}
