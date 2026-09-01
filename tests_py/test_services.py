@@ -23,6 +23,7 @@ from cajnmnstr.models import (
     BrokerOrderSnapshot,
     EventType,
     HealthState,
+    MarketClockSnapshot,
     OrderCandidate,
     OrderIntent,
     PositionSnapshot,
@@ -82,6 +83,15 @@ class MockBroker:
     def list_orders(self) -> list[BrokerOrderSnapshot]:
         return list(self.orders)
 
+    def get_clock(self) -> MarketClockSnapshot:
+        now = datetime(2026, 8, 31, 15, 0, tzinfo=UTC)
+        return MarketClockSnapshot(
+            timestamp=now,
+            is_open=True,
+            next_open=now,
+            next_close=now,
+        )
+
 
 def verified_position(*, quantity: Decimal = Decimal("2")) -> PositionSnapshot:
     return PositionSnapshot(
@@ -114,6 +124,7 @@ def settings(
             ),
             "CAJNMNSTR_BROKER_LOCK": "true" if broker_lock else "false",
             "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
+            "CAJNMNSTR_SESSION_LOSS_LIMIT_USD": "1000",
         },
         load_local_file=False,
     )
@@ -232,6 +243,7 @@ def detailed_health(**overrides: HealthState) -> HealthReport:
         "spy_quote": HealthState.HEALTHY,
         "option_quote": HealthState.HEALTHY,
         "risk_limits": HealthState.HEALTHY,
+        "session_risk": HealthState.HEALTHY,
         "ai_provider": HealthState.HEALTHY,
         "news": HealthState.HEALTHY,
         "event_calendar": HealthState.HEALTHY,
@@ -585,6 +597,48 @@ def test_daily_loss_lock_blocks_entry_but_preserves_exit_authority(tmp_path: Pat
     )
     assert len(exit_broker.submissions) == 1
     assert last_transition(exit_journal)["execution_allowed"] is True
+
+
+def test_reconciled_session_loss_lock_is_enforced_by_entry_authority(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    journal, broker, _, authority = authority_fixture(tmp_path)
+    filled_at = datetime(2026, 8, 31, 15, 0, tzinfo=UTC)
+    lifecycle = {
+        "plan_id": "closed-loss-plan",
+        "state": "CLOSED_BROKER_FLAT",
+        "created_at": filled_at.isoformat(),
+        "exit_client_order_id": "cajnmnstr-session-loss-exit",
+        "lifecycle": {
+            "fill_confirmed_at": filled_at.isoformat(),
+            "initial_confirmed_average_entry_price": "14.00",
+            "initial_confirmed_quantity": "1",
+            "broker_flat_verified": True,
+        },
+    }
+    exit_record = {
+        "status": "CLOSED_BROKER_FLAT",
+        "payload": {
+            "execution_quality": {
+                "actual_fill_price": "4.00",
+                "filled_quantity": "1",
+            }
+        },
+    }
+    monkeypatch.setattr(journal, "all_position_lifecycles", lambda: [lifecycle])
+    monkeypatch.setattr(
+        journal,
+        "broker_order_record",
+        lambda client_order_id: (
+            exit_record if client_order_id == "cajnmnstr-session-loss-exit" else None
+        ),
+    )
+
+    with pytest.raises(ExecutionDisabledError, match="session loss reached"):
+        authority.execute(passport_id="passport-001", candidate=candidate())
+    assert broker.submissions == []
+    assert last_transition(journal)["reason_code"] == "SESSION_LOSS_LIMIT_REACHED"
 
 
 def test_forced_eod_exit_does_not_depend_on_ai_availability(tmp_path: Path) -> None:

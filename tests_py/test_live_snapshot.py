@@ -46,6 +46,7 @@ def app_settings(tmp_path: Path) -> Settings:
             "CAJNMNSTR_BROKER_LOCK": "false",
             "CAJNMNSTR_AI_PROVIDER": "openai",
             "OPENAI_API_KEY": "fixture-openai-key",
+            "CAJNMNSTR_SESSION_LOSS_LIMIT_USD": "1000",
         },
         load_local_file=False,
     )

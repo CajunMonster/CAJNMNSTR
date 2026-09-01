@@ -136,6 +136,18 @@ SCHEMA_STATEMENTS = (
         payload_json TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS session_risk_states (
+        session_date TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        realized_pnl TEXT,
+        loss_limit TEXT,
+        loss_remaining TEXT,
+        completed_lifecycles INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+    )
+    """,
     """CREATE INDEX IF NOT EXISTS idx_journal_events_occurred_at
     ON journal_events(occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_journal_events_passport
@@ -622,6 +634,64 @@ class Journal:
             {**dict(row), "payload": json.loads(str(row["payload_json"]))}
             for row in rows
         ]
+
+    def save_session_risk_state(self, payload: dict[str, Any]) -> bool:
+        session_date = str(payload["session_date"])
+        encoded = json.dumps(payload, sort_keys=True, default=str)
+        with self._connect() as connection:
+            prior = connection.execute(
+                "SELECT payload_json FROM session_risk_states WHERE session_date = ?",
+                (session_date,),
+            ).fetchone()
+            prior_payload = (
+                None if prior is None else json.loads(str(prior["payload_json"]))
+            )
+            comparison = dict(payload)
+            comparison.pop("evaluated_at", None)
+            if prior_payload is not None:
+                prior_payload.pop("evaluated_at", None)
+            changed = prior_payload != comparison
+            connection.execute(
+                """INSERT INTO session_risk_states
+                (session_date, status, realized_pnl, loss_limit, loss_remaining,
+                 completed_lifecycles, updated_at, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(session_date) DO UPDATE SET
+                    status = excluded.status,
+                    realized_pnl = excluded.realized_pnl,
+                    loss_limit = excluded.loss_limit,
+                    loss_remaining = excluded.loss_remaining,
+                    completed_lifecycles = excluded.completed_lifecycles,
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json""",
+                (
+                    session_date,
+                    str(payload["status"]),
+                    payload.get("realized_pnl"),
+                    payload.get("loss_limit"),
+                    payload.get("loss_remaining"),
+                    int(payload.get("completed_lifecycles", 0)),
+                    str(payload["evaluated_at"]),
+                    encoded,
+                ),
+            )
+        return changed
+
+    def session_risk_state(self, session_date: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload_json FROM session_risk_states WHERE session_date = ?",
+                (session_date,),
+            ).fetchone()
+        return None if row is None else json.loads(str(row["payload_json"]))
+
+    def latest_session_risk_state(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT payload_json FROM session_risk_states
+                ORDER BY session_date DESC LIMIT 1"""
+            ).fetchone()
+        return None if row is None else json.loads(str(row["payload_json"]))
 
     def has_unverified_exit(self) -> bool:
         return any(

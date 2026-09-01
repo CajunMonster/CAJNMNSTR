@@ -35,6 +35,7 @@ def settings(tmp_path) -> Settings:
             "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
             "CAJNMNSTR_AI_PROVIDER": "openai",
             "OPENAI_API_KEY": "fixture-openai-key",
+            "CAJNMNSTR_SESSION_LOSS_LIMIT_USD": "1000",
         },
         load_local_file=False,
     )
@@ -204,9 +205,12 @@ def test_restart_uses_durable_supervisor_epoch_to_prevent_duplicate_decision(
     assert supervisor.terminals[0][0] == "BOUNDED_RUN_COMPLETE"
 
 
-def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> None:
+def test_candidate_is_recorded_and_later_epochs_continue_without_submission(tmp_path) -> None:
     app = settings(tmp_path)
-    runner = FakeRunner([collection(DECISION_AT)], ["READY_FOR_OPERATOR_REVIEW"])
+    runner = FakeRunner(
+        [collection(DECISION_AT), collection(DECISION_AT + timedelta(minutes=5))],
+        ["READY_FOR_OPERATOR_REVIEW", "NOT_ELIGIBLE"],
+    )
     result = ContinuousDecisionLoop(
         app,
         Journal(app.journal_path),
@@ -215,10 +219,11 @@ def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> No
     ).run(
         confirmation=READ_ONLY_LOOP_CONFIRMATION,
         cadence_seconds=30,
+        max_cycles=2,
     )
 
-    assert result.terminal_state == "OPERATOR_REVIEW_PENDING"
-    assert result.canonical_decisions == 1
+    assert result.terminal_state == "BOUNDED_RUN_COMPLETE"
+    assert result.canonical_decisions == 2
     assert result.entry_submission_allowed is False
 
 

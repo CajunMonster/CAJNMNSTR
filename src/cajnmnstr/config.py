@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -42,6 +43,18 @@ def _positive_float(value: str | None, *, default: float) -> float:
     return parsed
 
 
+def _optional_positive_decimal(value: str | None, *, name: str) -> Decimal | None:
+    if value is None or value.strip() == "":
+        return None
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as exc:
+        raise ConfigurationError(f"{name} must be a decimal amount") from exc
+    if not parsed.is_finite() or parsed <= 0:
+        raise ConfigurationError(f"{name} must be finite and greater than zero")
+    return parsed
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     environment: str
@@ -63,6 +76,7 @@ class Settings:
     openai_api_key: str | None
     openai_model: str
     ai_timeout_seconds: float
+    session_loss_limit_usd: Decimal | None
 
     @classmethod
     def from_env(
@@ -115,6 +129,10 @@ class Settings:
             openai_model=env.get("CAJNMNSTR_TERRA_MODEL", TERRA_MODEL).strip(),
             ai_timeout_seconds=_positive_float(
                 env.get("CAJNMNSTR_AI_TIMEOUT_SECONDS"), default=30.0
+            ),
+            session_loss_limit_usd=_optional_positive_decimal(
+                env.get("CAJNMNSTR_SESSION_LOSS_LIMIT_USD"),
+                name="CAJNMNSTR_SESSION_LOSS_LIMIT_USD",
             ),
         )
         settings.validate_static_safety()
@@ -244,4 +262,9 @@ class Settings:
             "ai_configured": self.ai_configured,
             "openai_model": self.openai_model,
             "ai_timeout_seconds": self.ai_timeout_seconds,
+            "session_loss_limit_usd": (
+                None
+                if self.session_loss_limit_usd is None
+                else str(self.session_loss_limit_usd)
+            ),
         }

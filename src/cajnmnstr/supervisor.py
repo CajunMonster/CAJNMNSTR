@@ -19,6 +19,11 @@ from .decision_cycle import MAX_SPREAD_RATIO
 from .journal import Journal
 from .live_snapshot import LiveDecisionOutcome, LiveEvidenceCollection, write_dashboard_state
 from .models import EventType
+from .session_risk import (
+    SessionRiskAuthority,
+    SessionRiskSnapshot,
+    reconciled_realized_pnl,
+)
 
 NEW_YORK = ZoneInfo("America/New_York")
 CHECKPOINT_INTERVAL = timedelta(hours=1)
@@ -152,6 +157,7 @@ class CompetitionSupervisor:
         self.cadence_seconds = cadence_seconds
         self._now = now or (lambda: datetime.now(UTC))
         self.recovery = recovery or NoopRecoveryActions()
+        self.session_risk = SessionRiskAuthority(settings, journal, now=self._now)
         self._state: dict[str, Any] | None = None
         self._last_summary: dict[str, Any] | None = None
 
@@ -230,7 +236,8 @@ class CompetitionSupervisor:
             state["last_epoch"] = decision_epoch
             state["last_epoch_advanced_at"] = now.isoformat()
 
-        metrics = self._metrics(collection, state, now)
+        session_risk = self.session_risk.evaluate(collection.clock)
+        metrics = self._metrics(collection, state, now, session_risk)
         warnings = self._warnings(metrics)
         checkpoint_types = self._checkpoint_types(
             collection,
@@ -249,6 +256,7 @@ class CompetitionSupervisor:
             recovered=recovered,
             warnings=warnings,
             metrics=metrics,
+            session_risk=session_risk,
         )
         for checkpoint_type in checkpoint_types:
             self._persist_checkpoint(checkpoint_type, summary, now)
@@ -584,6 +592,7 @@ class CompetitionSupervisor:
         collection: LiveEvidenceCollection,
         state: dict[str, Any],
         now: datetime,
+        session_risk: SessionRiskSnapshot,
     ) -> dict[str, Any]:
         started = _as_datetime(state.get("competition_started_at")) or now
         events = [
@@ -714,6 +723,7 @@ class CompetitionSupervisor:
         ).upper()
         return {
             "decision_epochs": len(terra_events),
+            "eligible_epochs": len(terra_events),
             "terra_long_call": directions["LONG_CALL"],
             "terra_long_put": directions["LONG_PUT"],
             "terra_no_trade": directions["NO_TRADE"],
@@ -728,6 +738,10 @@ class CompetitionSupervisor:
             "wins": len(winners),
             "losses": len(losers),
             "realized_pnl": _safe_number(sum(realized, Decimal("0"))),
+            "realized_session_pnl": _safe_number(session_risk.realized_pnl),
+            "session_loss_limit": _safe_number(session_risk.loss_limit),
+            "session_loss_remaining": _safe_number(session_risk.loss_remaining),
+            "session_risk_status": session_risk.status,
             "unrealized_pnl": _safe_number(
                 sum(
                     (
@@ -767,35 +781,7 @@ class CompetitionSupervisor:
         }
 
     def _realized_pnl(self, lifecycle: dict[str, Any]) -> Decimal | None:
-        stored = _as_decimal(lifecycle["lifecycle"].get("realized_pnl"))
-        if stored is not None:
-            return stored
-        exit_id = lifecycle.get("exit_client_order_id")
-        if not exit_id:
-            return None
-        order = self.journal.broker_order_record(str(exit_id))
-        if order is None:
-            return None
-        quality = order["payload"].get("execution_quality")
-        if not isinstance(quality, dict):
-            return None
-        entry_price = _as_decimal(
-            lifecycle["lifecycle"].get("initial_confirmed_average_entry_price")
-        )
-        planned_quantity = _as_decimal(
-            lifecycle["lifecycle"].get("initial_confirmed_quantity")
-        )
-        exit_price = _as_decimal(quality.get("actual_fill_price"))
-        filled_quantity = _as_decimal(quality.get("filled_quantity"))
-        if (
-            entry_price is None
-            or planned_quantity is None
-            or exit_price is None
-            or filled_quantity is None
-        ):
-            return None
-        quantity = min(planned_quantity, filled_quantity)
-        return (exit_price - entry_price) * quantity * Decimal("100")
+        return reconciled_realized_pnl(self.journal, lifecycle)
 
     @staticmethod
     def _warnings(metrics: dict[str, Any]) -> list[dict[str, str]]:
@@ -931,6 +917,7 @@ class CompetitionSupervisor:
         recovered: list[str],
         warnings: list[dict[str, str]],
         metrics: dict[str, Any],
+        session_risk: SessionRiskSnapshot,
     ) -> dict[str, Any]:
         stale_labels = {str(item).upper() for item in collection.snapshot.stale_sources}
         sip_state = (
@@ -949,6 +936,7 @@ class CompetitionSupervisor:
             "system_state": (
                 "PAUSED"
                 if not collection.clock.is_open
+                or not session_risk.entry_allowed
                 or any(a.severity == "CRITICAL" for a in alerts)
                 else ("DEGRADED" if alerts else "HEALTHY")
             ),
@@ -958,7 +946,13 @@ class CompetitionSupervisor:
             "broker_reconciled": collection.reconciliation.matched,
             "sip": sip_state,
             "opra": opra_state,
-            "entry_authority": "DISABLED" if not self.settings.entry_enabled else "ENABLED",
+            "entry_authority": (
+                "SESSION_RISK_BLOCKED"
+                if not session_risk.entry_allowed
+                else "DISABLED"
+                if not self.settings.entry_enabled
+                else "ENABLED"
+            ),
             "position_management": (
                 "ARMED" if self.settings.position_management_armed else "DISABLED_OR_UNARMED"
             ),
@@ -969,6 +963,7 @@ class CompetitionSupervisor:
             "recoveries": recovered,
             "behavioral_warnings": warnings,
             "metrics": metrics,
+            "session_risk": session_risk.to_dict(),
             "next_expected_action": self._next_action(collection, alerts, loop_state),
             "broker_submission_allowed": False,
         }
@@ -986,7 +981,7 @@ class CompetitionSupervisor:
         if not collection.clock.is_open:
             return "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
         if loop_state == "READY_FOR_OPERATOR_REVIEW":
-            return "OWNER REVIEW REQUIRED; DO NOT SUBMIT"
+            return "RECORD CANDIDATE; CONTINUE MONITORING WHILE ENTRY IS DISABLED"
         return "MONITOR NEXT COMPLETED FIVE-MINUTE EVIDENCE EPOCH"
 
     def _persist_checkpoint(
@@ -1016,6 +1011,9 @@ class CompetitionSupervisor:
                 "decision_epochs": summary["metrics"]["decision_epochs"],
                 "trades": summary["metrics"]["trades_submitted"],
                 "realized_pnl": summary["metrics"]["realized_pnl"],
+                "realized_session_pnl": summary["metrics"]["realized_session_pnl"],
+                "session_risk_status": summary["metrics"]["session_risk_status"],
+                "session_loss_remaining": summary["metrics"]["session_loss_remaining"],
                 "entry_submission_allowed": False,
             },
             protective_action=(

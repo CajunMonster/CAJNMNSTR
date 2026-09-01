@@ -43,6 +43,7 @@ from .models import (
 )
 from .ports import AnalysisProvider, BrokerReader, MarketDataReader
 from .services import BrokerReconciler
+from .session_risk import SessionRiskAuthority, SessionRiskSnapshot
 
 NEW_YORK = ZoneInfo("America/New_York")
 LIVE_QUOTE_MAX_AGE = timedelta(seconds=30)
@@ -74,6 +75,7 @@ class LiveDecisionOutcome:
     decision: ReplayDecisionResult
     health: HealthReport
     dashboard: dict[str, Any]
+    session_risk: SessionRiskSnapshot
 
 
 def _iso(moment: datetime | None) -> str | None:
@@ -315,6 +317,7 @@ def build_live_health(
     settings: Settings,
     collection: LiveEvidenceCollection,
     analysis: AnalysisResult | None,
+    session_risk: SessionRiskSnapshot,
 ) -> HealthReport:
     checked_at = datetime.now(UTC)
     safe_stop = "Keep new entries blocked and preserve the current broker state."
@@ -402,6 +405,13 @@ def build_live_health(
             "Risk thresholds are unchanged and the account is flat.",
             checked_at,
             safe_stop,
+        ),
+        _component(
+            "session_risk",
+            HealthState.HEALTHY if session_risk.entry_allowed else HealthState.PAUSED,
+            session_risk.detail,
+            checked_at,
+            "Block new entry only; preserve deterministic position management.",
         ),
         _component(
             "ai_provider",
@@ -1071,6 +1081,7 @@ class LiveDecisionRunner:
         self.journal = journal
         self.collector = LiveEvidenceCollector(settings, journal, reader)
         self.pipeline = ReplayDecisionPipeline(settings, journal, analysis_provider)
+        self.session_risk = SessionRiskAuthority(settings, journal)
 
     def run(
         self,
@@ -1098,14 +1109,21 @@ class LiveDecisionRunner:
             instructions=TERRA_LIVE_INSTRUCTIONS,
             prompt_version=TERRA_LIVE_PROMPT_VERSION,
         )
-        health = build_live_health(self.settings, collection, self._analysis(decision))
+        session_risk = self.session_risk.evaluate(collection.clock)
+        health = build_live_health(
+            self.settings,
+            collection,
+            self._analysis(decision),
+            session_risk,
+        )
         self._journal_health(health)
         dashboard = _dashboard_state(self.settings, collection, decision, health)
+        dashboard["session_risk"] = session_risk.to_dict()
         if dashboard_path is not None:
             write_dashboard_state(dashboard_path, dashboard)
         if health_path is not None:
             write_health_state(health_path, self.settings, health)
-        return LiveDecisionOutcome(collection, decision, health, dashboard)
+        return LiveDecisionOutcome(collection, decision, health, dashboard, session_risk)
 
     def publish_monitor_state(
         self,
@@ -1115,9 +1133,11 @@ class LiveDecisionRunner:
         health_path: Path | None = None,
     ) -> None:
         """Publish a truthful monitoring state without invoking the AI decision path."""
-        health = build_live_health(self.settings, collection, None)
+        session_risk = self.session_risk.evaluate(collection.clock)
+        health = build_live_health(self.settings, collection, None, session_risk)
         self._journal_health(health)
         dashboard = _monitor_dashboard_state(self.settings, collection, health)
+        dashboard["session_risk"] = session_risk.to_dict()
         if dashboard_path is not None:
             write_dashboard_state(dashboard_path, dashboard)
         if health_path is not None:

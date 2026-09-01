@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -132,6 +133,24 @@ def test_redacted_config_never_returns_secret_values(tmp_path: Path) -> None:
     output = str(settings.redacted())
     assert "visible-key" not in output
     assert "visible-secret" not in output
+
+
+def test_session_loss_threshold_is_explicit_positive_owner_configuration(
+    tmp_path: Path,
+) -> None:
+    missing = Settings.from_env(env(tmp_path), load_local_file=False)
+    assert missing.session_loss_limit_usd is None
+    configured = Settings.from_env(
+        env(tmp_path, CAJNMNSTR_SESSION_LOSS_LIMIT_USD="750.00"),
+        load_local_file=False,
+    )
+    assert configured.session_loss_limit_usd == Decimal("750.00")
+    assert configured.redacted()["session_loss_limit_usd"] == "750.00"
+    with pytest.raises(ConfigurationError, match="greater than zero"):
+        Settings.from_env(
+            env(tmp_path, CAJNMNSTR_SESSION_LOSS_LIMIT_USD="0"),
+            load_local_file=False,
+        )
 
 
 def test_legacy_generic_model_variable_is_ignored_and_never_reported(tmp_path: Path) -> None:

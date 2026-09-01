@@ -69,7 +69,9 @@ def test_fresh_data_is_healthy() -> None:
 
 
 def test_health_authority_profiles_are_explicit_and_narrow() -> None:
-    assert {"ai_provider", "risk_limits", "option_quote"} <= ENTRY_CRITICAL_COMPONENTS
+    assert {"ai_provider", "risk_limits", "session_risk", "option_quote"} <= (
+        ENTRY_CRITICAL_COMPONENTS
+    )
     assert {
         "alpaca",
         "broker_state",
@@ -78,7 +80,7 @@ def test_health_authority_profiles_are_explicit_and_narrow() -> None:
         "option_quote",
         "evidence_store",
     } <= EXIT_CRITICAL_COMPONENTS
-    assert {"ai_provider", "risk_limits", "spy_quote"} <= (
+    assert {"ai_provider", "risk_limits", "session_risk", "spy_quote"} <= (
         NONCRITICAL_FOR_EXIT_COMPONENTS
     )
     assert EXIT_CRITICAL_COMPONENTS.isdisjoint(NONCRITICAL_FOR_EXIT_COMPONENTS)

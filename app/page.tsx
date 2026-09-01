@@ -114,8 +114,16 @@ type DashboardState = {
     recoveries: string[];
     behavioral_warnings: Array<{ code: string; detail: string }>;
     next_expected_action: string;
+    session_risk?: {
+      status: string;
+      realized_pnl: string | null;
+      loss_limit: string | null;
+      loss_remaining: string | null;
+      entry_allowed: boolean;
+    };
     metrics: {
       decision_epochs: number;
+      eligible_epochs?: number;
       referee_approve: number;
       referee_reduce: number;
       referee_abstain: number;
@@ -124,6 +132,10 @@ type DashboardState = {
       wins: number;
       losses: number;
       realized_pnl: number | null;
+      realized_session_pnl?: number | null;
+      session_loss_limit?: number | null;
+      session_loss_remaining?: number | null;
+      session_risk_status?: string;
       unrealized_pnl: number | null;
       current_equity: number | null;
       max_drawdown_fraction: number | null;
@@ -505,7 +517,8 @@ function SupervisorPanel({ state }: { state: DashboardState }) {
         <div><span>DECISION EPOCHS</span><strong>{metrics.decision_epochs}</strong></div>
         <div><span>REFEREE</span><strong>{metrics.referee_approve} A · {metrics.referee_reduce} R · {metrics.referee_abstain} ABS · {metrics.referee_block} B</strong></div>
         <div><span>TRADES / W-L</span><strong>{metrics.trades_submitted} · {metrics.wins}-{metrics.losses}</strong></div>
-        <div><span>P&amp;L / CAPITAL</span><strong>{money(metrics.realized_pnl)} realized · {money(metrics.unrealized_pnl)} open · {money(metrics.capital_deployed)} deployed</strong></div>
+        <div><span>SESSION P&amp;L / LOSS REMAINING</span><strong>{money(metrics.realized_session_pnl ?? metrics.realized_pnl)} session · {metrics.session_loss_remaining == null ? "OWNER THRESHOLD REQUIRED" : money(metrics.session_loss_remaining)} remaining</strong></div>
+        <div><span>EQUITY / DRAWDOWN / CAPITAL</span><strong>{money(metrics.current_equity)} equity · {metrics.max_drawdown_fraction == null ? "—" : `${(metrics.max_drawdown_fraction * 100).toFixed(2)}%`} DD · {money(metrics.capital_deployed)} deployed</strong></div>
         <div><span>TOP REFUSAL</span><strong>{topReason ? `${topReason.reason} (${topReason.count})` : "NONE RECORDED"}</strong></div>
         <div><span>ALERTS / WARNINGS</span><strong>{supervisor.alerts.length} / {supervisor.behavioral_warnings.length}</strong></div>
         <div><span>NEXT EXPECTED ACTION</span><strong>{supervisor.next_expected_action}</strong><small>{timestamp(supervisor.updated_at)}</small></div>

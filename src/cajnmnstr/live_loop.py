@@ -109,7 +109,7 @@ def _after_regular_session(collection: LiveEvidenceCollection) -> bool:
 
 
 class ContinuousDecisionLoop:
-    """Read-only loop: monitor each minute, evaluate once per completed five-minute bar."""
+    """Monitor each minute and evaluate each completed five-minute epoch exactly once."""
 
     def __init__(
         self,
@@ -255,8 +255,6 @@ class ContinuousDecisionLoop:
                     cached_decisions += int(outcome.decision.ai_cached)
                     last_passport_id = outcome.decision.passport_id
                     state = outcome.decision.operator_review.state
-                    if state == "READY_FOR_OPERATOR_REVIEW":
-                        terminal_state = "OPERATOR_REVIEW_PENDING"
 
                 if not decision_published:
                     self.runner.publish_monitor_state(
@@ -311,8 +309,6 @@ class ContinuousDecisionLoop:
                         position_manager_attached=self.position_manager is not None,
                     )
 
-                if terminal_state == "OPERATOR_REVIEW_PENDING":
-                    break
                 if state in {
                     "POSITION_MANAGEMENT_DISABLED",
                     "POSITION_MANAGEMENT_HANDLER_REQUIRED",

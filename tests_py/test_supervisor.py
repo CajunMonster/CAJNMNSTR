@@ -32,6 +32,7 @@ def settings(tmp_path: Path) -> Settings:
             "CAJNMNSTR_EXECUTION_CONFIRMATION": EXECUTION_CONFIRMATION,
             "CAJNMNSTR_AI_PROVIDER": "openai",
             "OPENAI_API_KEY": "fixture-openai-key",
+            "CAJNMNSTR_SESSION_LOSS_LIMIT_USD": "1000",
         },
         load_local_file=False,
     )
@@ -393,8 +394,10 @@ def test_realized_pnl_uses_durable_entry_and_execution_quality(tmp_path: Path) -
         },
     )
     lifecycle = {
+        "state": "CLOSED_BROKER_FLAT",
         "exit_client_order_id": "cajnmnstr-exit-quality",
         "lifecycle": {
+            "broker_flat_verified": True,
             "initial_confirmed_average_entry_price": "4.00",
             "initial_confirmed_quantity": "1",
         },

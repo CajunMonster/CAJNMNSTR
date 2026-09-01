@@ -132,8 +132,9 @@ The continuous loop has two explicit modes. Read-only monitoring can be started 
 ```
 
 It monitors once per minute, invokes Terra at most once for each new completed five-minute bar,
-continues after `NO_TRADE` / `ABSTAIN` / `BLOCK`, and pauses at
-`READY_FOR_OPERATOR_REVIEW`. It has no execution-coordinator dependency and always reports
+continues after `NO_TRADE` / `ABSTAIN` / `BLOCK`, and records actionable
+`READY_FOR_OPERATOR_REVIEW` candidates without reserving the one-position slot or stopping later
+epochs. It has no execution-coordinator dependency and always reports
 `broker_submission_allowed=false`.
 
 The position-management mode is separately armed and confirmed:
@@ -163,8 +164,12 @@ explicit entry values fail closed.
 The deterministic Competition Supervisor observes the existing loop, broker reconciliation,
 SIP/OPRA freshness, Terra availability, durable order/exit uncertainty, journal progress, and
 dashboard freshness. It persists startup, hourly, candidate, entry, exit, incident, recovery, and
-end-of-session checkpoints plus descriptive capital/P&L telemetry. Its warnings never change a
-strategy or risk parameter and it has no AI or broker-mutation interface.
+end-of-session checkpoints plus descriptive capital/P&L telemetry. A durable owner-configured
+`CAJNMNSTR_SESSION_LOSS_LIMIT_USD` authority sums only reconciled, verified-flat realized PAPER
+P&L for the current New York trading session. Missing/unknown state, reaching the limit, or the
+approved 3:35 PM ET cutoff blocks new entries only; deterministic exits remain available. There is
+no daily trade-count allowance. Its warnings never change a strategy or risk parameter and it has
+no AI or broker-mutation interface.
 
 For the next regular session, start the bounded Windows watchdog from the project root:
 
@@ -176,8 +181,7 @@ It refuses enabled/armed entry authority, chooses read-only or already-armed det
 position-management mode from the redacted local configuration, starts/restarts the dashboard
 independently, and restarts a crashed or three-cadence-stalled loop at most three times. Every loop
 restart recovers durable decision epochs and reconciles before analysis, so it cannot fish for a
-new Terra answer or blindly retry an uncertain broker write. A clean stop at operator review or
-end of session is not restarted.
+new Terra answer or blindly retry an uncertain broker write. End of session is not restarted.
 
 ## Demo and submission material
 

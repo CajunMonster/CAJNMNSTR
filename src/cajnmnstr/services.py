@@ -28,6 +28,7 @@ from .models import (
     RefereeVerdict,
 )
 from .ports import BrokerReader, PaperExecutor
+from .session_risk import SessionRiskAuthority
 
 
 def _submission_is_unknown(error: Exception) -> bool:
@@ -584,6 +585,33 @@ class OperatorAuthorityPath:
                 reason_code=reason_code,
                 error=exc,
             )
+
+        if candidate.position_intent == "buy_to_open":
+            try:
+                session_risk = SessionRiskAuthority(
+                    self.settings,
+                    self.journal,
+                ).evaluate(self.coordinator.broker.get_clock())
+            except Exception as exc:
+                self._deny(
+                    passport_id=passport_id,
+                    passport_exists=True,
+                    verdict=verdict.value,
+                    authority=authority,
+                    reason_code="SESSION_RISK_UNAVAILABLE",
+                    error=ExecutionDisabledError(
+                        f"Session realized-loss authority could not be established: {exc}"
+                    ),
+                )
+            if not session_risk.entry_allowed:
+                self._deny(
+                    passport_id=passport_id,
+                    passport_exists=True,
+                    verdict=verdict.value,
+                    authority=authority,
+                    reason_code=session_risk.reason_code,
+                    error=ExecutionDisabledError(session_risk.detail),
+                )
 
         current_health = self.health_state()
         health_decision = authority_health(

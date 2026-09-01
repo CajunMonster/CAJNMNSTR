@@ -20,6 +20,7 @@ ENTRY_CRITICAL_COMPONENTS = frozenset(
         "spy_quote",
         "option_quote",
         "risk_limits",
+        "session_risk",
         "ai_provider",
         "news",
         "event_calendar",
@@ -43,6 +44,7 @@ NONCRITICAL_FOR_EXIT_COMPONENTS = frozenset(
         "ai_provider",
         "spy_quote",
         "risk_limits",
+        "session_risk",
         "news",
         "event_calendar",
     }
