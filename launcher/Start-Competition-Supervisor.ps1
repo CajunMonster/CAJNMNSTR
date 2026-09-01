@@ -1,8 +1,9 @@
 param(
-    [ValidateRange(30, 300)]
+    [ValidateRange(1, 300)]
     [int]$CheckSeconds = 30,
     [ValidateRange(1, 10)]
-    [int]$MaximumRestarts = 3
+    [int]$MaximumRestarts = 3,
+    [switch]$TestMode
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +17,30 @@ $stdoutPath = Join-Path $runtimeRoot 'competition-loop.stdout.log'
 $stderrPath = Join-Path $runtimeRoot 'competition-loop.stderr.log'
 $watchdogPath = Join-Path $runtimeRoot 'competition-supervisor.json'
 $incidentPath = Join-Path $runtimeRoot 'incidents.jsonl'
+$startupLogPath = Join-Path $runtimeRoot 'competition-startup.jsonl'
+$mutexName = 'Local\CAJNMNSTRCompetitionSupervisor'
+
+if ($TestMode) {
+    $dashboardPath = Join-Path $runtimeRoot 'startup-test-dashboard.json'
+    $healthPath = Join-Path $runtimeRoot 'startup-test-health.json'
+}
+
+function Write-StartupEvent(
+    [string]$code,
+    [string]$severity,
+    [string]$detail
+) {
+    [pscustomobject]@{
+        occurred_at = [DateTimeOffset]::UtcNow.ToString('o')
+        source = 'competition_scheduled_startup'
+        severity = $severity
+        code = $code
+        detail = $detail
+        test_mode = [bool]$TestMode
+        credentials_recorded = $false
+        broker_submission_allowed = $false
+    } | ConvertTo-Json -Compress | Add-Content -LiteralPath $startupLogPath -Encoding utf8
+}
 
 function Write-SupervisorIncident([string]$code, [string]$detail) {
     [pscustomobject]@{
@@ -66,7 +91,14 @@ function Start-CompetitionLoop([bool]$managePosition, [bool]$autonomous) {
         '--dashboard-path', $dashboardPath,
         '--health-path', $healthPath
     )
-    if ($autonomous) {
+    if ($TestMode) {
+        $arguments += @(
+            '--no-order-test',
+            '--confirm', 'PAPER_NO_ORDER_STARTUP_TEST',
+            '--max-cycles', '1'
+        )
+    }
+    elseif ($autonomous) {
         $arguments += @(
             '--manage-position',
             '--autonomous',
@@ -99,81 +131,108 @@ function Get-HeartbeatAgeSeconds {
     }
 }
 
-if (-not (Test-Path -LiteralPath $cli)) {
-    throw 'CAJNMNSTR local runtime is unavailable.'
-}
 New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
-$configuration = Read-RedactedConfiguration
-if ($configuration.broker_lock_active) {
-    throw 'Competition Supervisor refuses to start while the hard broker lock is active.'
-}
-$autonomous = [bool]$configuration.entry_armed
-if ($configuration.entry_enabled -and -not $autonomous) {
-    throw 'Enabled entry authority is not fully armed; refusing ambiguous autonomous state.'
-}
-if ($autonomous -and -not $configuration.position_management_armed) {
-    throw 'Autonomous entry requires armed deterministic position management.'
-}
-if ($autonomous -and $configuration.session_loss_limit_usd -ne '2000') {
-    throw 'Autonomous competition mode requires the owner-approved $2,000 session limit.'
-}
-$managePosition = [bool]$configuration.position_management_armed
-Start-LocalDashboard
 
-$restartCount = 0
-$loop = Start-CompetitionLoop $managePosition $autonomous
-while ($true) {
-    [pscustomobject]@{
-        app = 'CAJNMNSTR'
-        supervisor = 'competition_watchdog'
-        loop_pid = $loop.Id
-        loop_alive = -not $loop.HasExited
-        restart_count = $restartCount
-        checked_at = [DateTimeOffset]::UtcNow.ToString('o')
-        entry_enabled = [bool]$configuration.entry_enabled
-        autonomous_entry_mode = $autonomous
-        broker_submission_allowed = $false
-    } | ConvertTo-Json | Set-Content -LiteralPath $watchdogPath -Encoding utf8
+$createdNew = $false
+$supervisorMutex = [System.Threading.Mutex]::new(
+    $true,
+    $mutexName,
+    [ref]$createdNew
+)
+if (-not $createdNew) {
+    Write-StartupEvent 'DUPLICATE_SUPERVISOR_BLOCKED' 'INFO' 'An existing local Competition Supervisor owns the runtime mutex.'
+    $supervisorMutex.Dispose()
+    exit 0
+}
 
-    Start-Sleep -Seconds $CheckSeconds
-    $loop.Refresh()
+try {
+    Write-StartupEvent 'STARTUP_REQUESTED' 'INFO' 'Local Competition Supervisor startup began.'
+    if (-not (Test-Path -LiteralPath $cli)) {
+        throw 'CAJNMNSTR local runtime is unavailable.'
+    }
+    $configuration = Read-RedactedConfiguration
+    if ($configuration.broker_lock_active) {
+        throw 'Competition Supervisor refuses to start while the hard broker lock is active.'
+    }
+    $autonomous = [bool]$configuration.entry_armed
+    if ($configuration.entry_enabled -and -not $autonomous) {
+        throw 'Enabled entry authority is not fully armed; refusing ambiguous autonomous state.'
+    }
+    if ($autonomous -and -not $configuration.position_management_armed) {
+        throw 'Autonomous entry requires armed deterministic position management.'
+    }
+    if ($autonomous -and $configuration.session_loss_limit_usd -ne '2000') {
+        throw 'Autonomous competition mode requires the owner-approved $2,000 session limit.'
+    }
+    $managePosition = [bool]$configuration.position_management_armed
     Start-LocalDashboard
 
-    $restartReason = $null
-    if ($loop.HasExited) {
-        if ($loop.ExitCode -eq 0) {
-            break
-        }
-        $restartReason = "Loop process exited with code $($loop.ExitCode)."
-    }
-    elseif ((Get-HeartbeatAgeSeconds) -gt 180) {
-        $restartReason = 'Regular-session supervisor heartbeat exceeded three 60-second cadences.'
-        Stop-Process -Id $loop.Id -Force
-        $loop.WaitForExit()
-    }
+    $restartCount = 0
+    $loop = Start-CompetitionLoop $managePosition $autonomous
+    Write-StartupEvent 'SUPERVISOR_PROCESS_STARTED' 'INFO' 'The supervised PAPER loop process started after redacted safety validation.'
+    while ($true) {
+        [pscustomobject]@{
+            app = 'CAJNMNSTR'
+            supervisor = 'competition_watchdog'
+            loop_pid = $loop.Id
+            loop_alive = -not $loop.HasExited
+            restart_count = $restartCount
+            checked_at = [DateTimeOffset]::UtcNow.ToString('o')
+            entry_enabled = [bool]$configuration.entry_enabled
+            autonomous_entry_mode = $autonomous
+            broker_submission_allowed = $false
+        } | ConvertTo-Json | Set-Content -LiteralPath $watchdogPath -Encoding utf8
 
-    if ($null -ne $restartReason) {
-        Write-SupervisorIncident 'LOOP_STALLED' $restartReason
-        $restartCount += 1
-        if ($restartCount -gt $MaximumRestarts) {
-            Write-SupervisorIncident 'RECOVERY_EXHAUSTED' 'Bounded loop restart limit was reached.'
-            break
+        Start-Sleep -Seconds $CheckSeconds
+        $loop.Refresh()
+        Start-LocalDashboard
+
+        $restartReason = $null
+        if ($loop.HasExited) {
+            if ($loop.ExitCode -eq 0) {
+                break
+            }
+            $restartReason = "Loop process exited with code $($loop.ExitCode)."
         }
-        $configuration = Read-RedactedConfiguration
-        $autonomous = [bool]$configuration.entry_armed
-        if ($configuration.broker_lock_active) {
-            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Broker lock activated during recovery.'
-            break
+        elseif ((Get-HeartbeatAgeSeconds) -gt 180) {
+            $restartReason = 'Regular-session supervisor heartbeat exceeded three 60-second cadences.'
+            Stop-Process -Id $loop.Id -Force
+            $loop.WaitForExit()
         }
-        if ($configuration.entry_enabled -and -not $autonomous) {
-            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Entry authority became ambiguous during recovery.'
-            break
+
+        if ($null -ne $restartReason) {
+            Write-SupervisorIncident 'LOOP_STALLED' $restartReason
+            $restartCount += 1
+            if ($restartCount -gt $MaximumRestarts) {
+                Write-SupervisorIncident 'RECOVERY_EXHAUSTED' 'Bounded loop restart limit was reached.'
+                break
+            }
+            $configuration = Read-RedactedConfiguration
+            $autonomous = [bool]$configuration.entry_armed
+            if ($configuration.broker_lock_active) {
+                Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Broker lock activated during recovery.'
+                break
+            }
+            if ($configuration.entry_enabled -and -not $autonomous) {
+                Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Entry authority became ambiguous during recovery.'
+                break
+            }
+            if ($autonomous -and (-not $configuration.position_management_armed -or $configuration.session_loss_limit_usd -ne '2000')) {
+                Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Autonomous entry lost position-management or session-risk authority.'
+                break
+            }
+            $managePosition = [bool]$configuration.position_management_armed
+            $loop = Start-CompetitionLoop $managePosition $autonomous
         }
-        if ($autonomous -and (-not $configuration.position_management_armed -or $configuration.session_loss_limit_usd -ne '2000')) {
-            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Autonomous entry lost position-management or session-risk authority.'
-            break
-        }
-        $managePosition = [bool]$configuration.position_management_armed
-        $loop = Start-CompetitionLoop $managePosition $autonomous
     }
+    Write-StartupEvent 'SUPERVISOR_STOPPED' 'INFO' 'The supervised loop reached a clean terminal state.'
+}
+catch {
+    Write-StartupEvent 'STARTUP_FAILED' 'CRITICAL' ("Startup failed closed: " + $_.Exception.Message)
+    Write-SupervisorIncident 'STARTUP_FAILED' 'The scheduled Competition Supervisor did not establish a safe runtime.'
+    throw
+}
+finally {
+    $supervisorMutex.ReleaseMutex()
+    $supervisorMutex.Dispose()
 }

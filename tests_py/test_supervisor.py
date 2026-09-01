@@ -419,6 +419,29 @@ def test_watchdog_is_bounded_and_requires_explicit_autonomous_authority() -> Non
     assert "PAPER_READ_ONLY_LOOP" in script
     assert "broker_submission_allowed = $false" in script
     assert "submit_order" not in script.lower()
+    assert "CAJNMNSTRCompetitionSupervisor" in script
+    assert "DUPLICATE_SUPERVISOR_BLOCKED" in script
+    assert "competition-startup.jsonl" in script
+    assert "--max-cycles', '1'" in script
+    assert "--no-order-test" in script
+    assert "PAPER_NO_ORDER_STARTUP_TEST" in script
+
+
+def test_tuesday_task_registration_is_local_idempotent_and_secret_free() -> None:
+    script = (
+        Path(__file__).parents[1]
+        / "launcher"
+        / "Register-Tuesday-Competition-Startup.ps1"
+    ).read_text(encoding="utf-8")
+    assert "2026-09-01T08:15:00" in script
+    assert "Start-Competition-Supervisor.ps1" in script
+    assert "MultipleInstances = 'IgnoreNew'" in script
+    assert "LogonType = 'Interactive'" in script
+    assert "RunLevel = 'Limited'" in script
+    assert "WorkingDirectory = $projectRoot" in script
+    assert "ALPACA_API_KEY" not in script
+    assert "ALPACA_SECRET_KEY" not in script
+    assert "OPENAI_API_KEY" not in script
 
 
 def test_restart_recovers_durable_supervisor_state(tmp_path: Path) -> None:
@@ -441,6 +464,57 @@ def test_restart_recovers_durable_supervisor_state(tmp_path: Path) -> None:
     assert state["last_epoch"] == "2026-09-01T15:05:00+00:00"
     assert restored["loop_advancing"] is True
     assert len([c for c in journal.checkpoint_records() if c["checkpoint_type"] == "STARTUP"]) == 1
+
+
+def test_startup_is_session_scoped_and_market_open_is_checkpointed(tmp_path: Path) -> None:
+    current = [NOW - timedelta(hours=1)]
+    app = settings(tmp_path)
+    journal = Journal(app.journal_path)
+    journal.initialize()
+    premarket = CompetitionSupervisor(
+        app,
+        journal,
+        cadence_seconds=60,
+        now=lambda: current[0],
+    )
+    observe(
+        premarket,
+        collection(at=current[0], market_open=False),
+        epoch=None,
+    )
+    assert [item["checkpoint_type"] for item in journal.checkpoint_records()] == [
+        "STARTUP"
+    ]
+
+    current[0] = NOW
+    opened = CompetitionSupervisor(
+        app,
+        journal,
+        cadence_seconds=60,
+        now=lambda: current[0],
+    )
+    observe(opened, collection(at=current[0]), epoch="2026-09-01T15:00:00+00:00")
+    checkpoint_types = [
+        item["checkpoint_type"] for item in journal.checkpoint_records()
+    ]
+    assert checkpoint_types.count("STARTUP") == 1
+    assert checkpoint_types.count("MARKET_OPEN") == 1
+
+    next_day = NOW + timedelta(days=1)
+    next_session = CompetitionSupervisor(
+        app,
+        journal,
+        cadence_seconds=60,
+        now=lambda: next_day,
+    )
+    observe(
+        next_session,
+        collection(at=next_day, market_open=False),
+        epoch=None,
+    )
+    assert [
+        item["checkpoint_type"] for item in journal.checkpoint_records()
+    ].count("STARTUP") == 2
 
 
 def test_clean_terminal_state_never_claims_loop_is_still_advancing(tmp_path: Path) -> None:

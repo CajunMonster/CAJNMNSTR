@@ -17,6 +17,7 @@ NEW_YORK = ZoneInfo("America/New_York")
 READ_ONLY_LOOP_CONFIRMATION = "PAPER_READ_ONLY_LOOP"
 POSITION_MANAGEMENT_LOOP_CONFIRMATION = "PAPER_POSITION_MANAGEMENT_LOOP"
 AUTONOMOUS_LOOP_CONFIRMATION = "PAPER_AUTONOMOUS_COMPETITION"
+NO_ORDER_STARTUP_TEST_CONFIRMATION = "PAPER_NO_ORDER_STARTUP_TEST"
 DEFAULT_MONITOR_CADENCE_SECONDS = 60
 MINIMUM_MONITOR_CADENCE_SECONDS = 30
 ENTRY_RECOVERY_READY = frozenset({"ENTRY_READY", "ENTRY_ABORTED_RECOVERED"})
@@ -132,6 +133,7 @@ class ContinuousDecisionLoop:
         *,
         position_manager: PositionManagementHandler | None = None,
         entry_handler: AutonomousEntryHandler | None = None,
+        broker_mutations_forbidden: bool = False,
         supervisor: CompetitionSupervisorHandler | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -140,6 +142,7 @@ class ContinuousDecisionLoop:
         self.runner = runner
         self.position_manager = position_manager
         self.entry_handler = entry_handler
+        self.broker_mutations_forbidden = broker_mutations_forbidden
         self.supervisor = supervisor
         self._sleep = sleep
 
@@ -154,7 +157,9 @@ class ContinuousDecisionLoop:
     ) -> ContinuousLoopResult:
         self.settings.require_credentials()
         expected_confirmation = (
-            AUTONOMOUS_LOOP_CONFIRMATION
+            NO_ORDER_STARTUP_TEST_CONFIRMATION
+            if self.broker_mutations_forbidden
+            else AUTONOMOUS_LOOP_CONFIRMATION
             if self.entry_handler is not None
             else READ_ONLY_LOOP_CONFIRMATION
             if self.position_manager is None
@@ -162,7 +167,13 @@ class ContinuousDecisionLoop:
         )
         if confirmation != expected_confirmation:
             raise ValueError(f"Continuous monitoring requires --confirm {expected_confirmation}")
-        if self.entry_handler is None and (
+        if self.broker_mutations_forbidden and (
+            self.entry_handler is not None or self.position_manager is not None
+        ):
+            raise ValueError(
+                "No-order startup validation cannot attach a broker mutation handler"
+            )
+        if not self.broker_mutations_forbidden and self.entry_handler is None and (
             self.settings.entry_enabled or self.settings.entry_armed
         ):
             raise ValueError("Read-only continuous monitoring requires entry authority disabled")

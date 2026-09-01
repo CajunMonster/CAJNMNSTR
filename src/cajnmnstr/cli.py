@@ -23,6 +23,7 @@ from .journal import Journal
 from .live_loop import (
     AUTONOMOUS_LOOP_CONFIRMATION,
     DEFAULT_MONITOR_CADENCE_SECONDS,
+    NO_ORDER_STARTUP_TEST_CONFIRMATION,
     ContinuousDecisionLoop,
 )
 from .live_snapshot import (
@@ -216,6 +217,7 @@ def _live_loop(
     health_path: Path,
     manage_position: bool,
     autonomous: bool,
+    no_order_test: bool,
 ) -> int:
     """Run supervised monitoring with explicitly selected PAPER broker authority."""
     if not settings.ai_configured:
@@ -230,6 +232,8 @@ def _live_loop(
     )
     position_manager = None
     entry_handler = None
+    if no_order_test and (autonomous or manage_position):
+        raise ValueError("No-order startup validation cannot attach broker mutation handlers")
     if autonomous and not manage_position:
         raise ValueError("Autonomous entry requires --manage-position")
     if autonomous:
@@ -269,6 +273,7 @@ def _live_loop(
         runner,
         position_manager=position_manager,
         entry_handler=entry_handler,
+        broker_mutations_forbidden=no_order_test,
         supervisor=CompetitionSupervisor(
             settings,
             journal,
@@ -861,6 +866,14 @@ def build_parser() -> argparse.ArgumentParser:
             f"registration; requires --confirm {AUTONOMOUS_LOOP_CONFIRMATION}"
         ),
     )
+    live_loop.add_argument(
+        "--no-order-test",
+        action="store_true",
+        help=(
+            "Exercise live reads, Supervisor, journal, and dashboard with no broker mutation "
+            f"handler; requires --confirm {NO_ORDER_STARTUP_TEST_CONFIRMATION}"
+        ),
+    )
 
     plan = subparsers.add_parser(
         "register-position-plan",
@@ -913,6 +926,7 @@ def main(argv: list[str] | None = None) -> int:
             health_path=args.health_path,
             manage_position=args.manage_position,
             autonomous=args.autonomous,
+            no_order_test=args.no_order_test,
         )
     if args.command == "register-position-plan":
         return _register_position_plan(

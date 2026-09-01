@@ -263,6 +263,9 @@ class CompetitionSupervisor:
             state["last_checkpoint_at"] = now.isoformat()
             if checkpoint_type == "STARTUP":
                 state["startup_checkpoint_written"] = True
+                state["startup_checkpoint_date"] = (
+                    now.astimezone(NEW_YORK).date().isoformat()
+                )
             elif checkpoint_type == "FIRST_ACTIONABLE_CANDIDATE":
                 state["first_actionable_checkpoint_written"] = True
             elif checkpoint_type == "END_OF_SESSION":
@@ -876,8 +879,11 @@ class CompetitionSupervisor:
         recovered: list[str],
     ) -> list[str]:
         types: list[str] = []
-        if not state.get("startup_checkpoint_written"):
+        session_date = now.astimezone(NEW_YORK).date().isoformat()
+        if state.get("startup_checkpoint_date") != session_date:
             types.append("STARTUP")
+        if collection.clock.is_open and state.get("last_session_open") is not True:
+            types.append("MARKET_OPEN")
         last_checkpoint = _as_datetime(state.get("last_checkpoint_at"))
         if collection.clock.is_open and (
             last_checkpoint is None or now - last_checkpoint >= CHECKPOINT_INTERVAL
@@ -901,7 +907,6 @@ class CompetitionSupervisor:
             types.append("CRITICAL_INCIDENT")
         if recovered:
             types.append("SUCCESSFUL_RECOVERY")
-        session_date = now.astimezone(NEW_YORK).date().isoformat()
         if (
             state.get("last_session_open") is True
             and not collection.clock.is_open

@@ -9,6 +9,7 @@ from cajnmnstr.config import EXECUTION_CONFIRMATION, PAPER_API_URL, Settings
 from cajnmnstr.journal import Journal
 from cajnmnstr.live_loop import (
     AUTONOMOUS_LOOP_CONFIRMATION,
+    NO_ORDER_STARTUP_TEST_CONFIRMATION,
     POSITION_MANAGEMENT_LOOP_CONFIRMATION,
     READ_ONLY_LOOP_CONFIRMATION,
     ContinuousDecisionLoop,
@@ -383,3 +384,60 @@ def test_autonomous_loop_requires_position_management_before_collection(tmp_path
 
     assert runner.collector.index == 0
     assert entry.reconcile_calls == []
+
+
+def test_no_order_startup_mode_runs_with_armed_config_without_mutation_handlers(
+    tmp_path,
+) -> None:
+    app = replace(settings(tmp_path), entry_enabled=True)
+    runner = FakeRunner([collection(DECISION_AT)], ["READY_FOR_OPERATOR_REVIEW"])
+
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        broker_mutations_forbidden=True,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=NO_ORDER_STARTUP_TEST_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=1,
+    )
+
+    assert result.canonical_decisions == 1
+    assert result.entry_submission_allowed is False
+    assert result.position_management_mode is False
+    assert result.position_management_submission_possible is False
+
+
+@pytest.mark.parametrize(
+    ("position_manager", "entry_handler"),
+    [
+        (FakePositionManager(["FLAT"]), None),
+        (None, FakeEntryHandler()),
+    ],
+)
+def test_no_order_startup_mode_rejects_every_broker_mutation_handler(
+    tmp_path,
+    position_manager,
+    entry_handler,
+) -> None:
+    app = replace(settings(tmp_path), entry_enabled=True)
+    runner = FakeRunner([collection(DECISION_AT)], ["NOT_ELIGIBLE"])
+
+    with pytest.raises(ValueError, match="cannot attach a broker mutation handler"):
+        ContinuousDecisionLoop(
+            app,
+            Journal(app.journal_path),
+            runner,
+            position_manager=position_manager,
+            entry_handler=entry_handler,
+            broker_mutations_forbidden=True,
+            sleep=lambda _: None,
+        ).run(
+            confirmation=NO_ORDER_STARTUP_TEST_CONFIRMATION,
+            cadence_seconds=30,
+            max_cycles=1,
+        )
+
+    assert runner.collector.index == 0
