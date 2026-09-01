@@ -15,12 +15,16 @@ function Test-CAJNMNSTRHealth {
     try {
         $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2
         $knownState = $health.state -in @('HEALTHY', 'DEGRADED', 'PAUSED')
-        $readOnlyMode = $health.mode -in @('PAPER_READ_ONLY', 'REPLAY_READ_ONLY')
+        $safeMode = $health.mode -in @(
+            'PAPER_READ_ONLY',
+            'REPLAY_READ_ONLY',
+            'PAPER_AUTONOMOUS_ARMED'
+        )
         $brokerSubmissionBlocked = $health.broker_submission_allowed -eq $false
         return (
             $health.app -eq 'CAJNMNSTR' -and
             $knownState -and
-            $readOnlyMode -and
+            $safeMode -and
             $brokerSubmissionBlocked
         )
     }

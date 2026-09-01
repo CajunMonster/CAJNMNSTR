@@ -125,7 +125,7 @@ normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and sel
 Passport, updates the dashboard, and stops at operator review. `verify-terra` and
 `replay-cycle --live-terra` send only checked-in replay evidence to OpenAI.
 
-The continuous loop has two explicit modes. Read-only monitoring can be started with:
+The continuous loop has three explicit modes. Read-only monitoring can be started with:
 
 ```powershell
 .venv\Scripts\cajnmnstr.exe live-loop --confirm PAPER_READ_ONLY_LOOP
@@ -137,13 +137,13 @@ continues after `NO_TRADE` / `ABSTAIN` / `BLOCK`, and records actionable
 epochs. It has no execution-coordinator dependency and always reports
 `broker_submission_allowed=false`.
 
-The position-management mode is separately armed and confirmed:
+The position-management-only mode is separately armed and confirmed:
 
 ```powershell
 .venv\Scripts\cajnmnstr.exe live-loop --manage-position --confirm PAPER_POSITION_MANAGEMENT_LOOP
 ```
 
-This mode still rejects enabled new-entry authority. It may submit only a deterministic PAPER
+This mode rejects enabled new-entry authority. It may submit only a deterministic PAPER
 `sell_to_close` for a verified existing position whose immutable exit plan was registered before
 entry. Use `cajnmnstr register-position-plan --help` to review the required owner-supplied fields.
 The owner-approved initial competition policy is locked at a 25% executable-bid premium stop, a
@@ -153,6 +153,23 @@ boundary strictly beyond the SPY decision price on the invalidating side. Missin
 blocks registration. Registration also requires a sealed `APPROVE`/`REDUCE` Passport, the selected
 contract, explicit confirmation, strategy version, and rationale. Submission is not closure: the
 lifecycle remains pending until reconciliation proves broker quantity is zero.
+
+The owner-authorized autonomous PAPER mode requires entry authority, position management, the
+paper-only confirmation, a clear broker lock, and a configured session-loss limit before it can
+start:
+
+```powershell
+.venv\Scripts\cajnmnstr.exe live-loop --manage-position --autonomous --confirm PAPER_AUTONOMOUS_COMPETITION
+```
+
+For an actionable sealed Passport, this mode deterministically registers the frozen immutable
+position plan and invokes the existing authority path once. The coordinator still rechecks the
+Passport, Referee limits, selector candidate, session risk, component health, paper endpoint,
+broker reconciliation, durable client-order identity, and one-position invariant. An ambiguous
+submission becomes `SUBMIT_UNKNOWN` and is reconciled without blind retry. Accepted/unfilled
+entries reserve the position slot; terminally rejected or expired unfilled entries are retired so
+a later evidence epoch can be considered. A verified position transfers control to deterministic
+position management until `CLOSED_BROKER_FLAT`.
 
 The deprecated `CAJNMNSTR_EXECUTION_ENABLED` variable is accepted temporarily as an entry-only
 migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
@@ -177,11 +194,13 @@ For the next regular session, start the bounded Windows watchdog from the projec
 powershell -ExecutionPolicy Bypass -File launcher\Start-Competition-Supervisor.ps1
 ```
 
-It refuses enabled/armed entry authority, chooses read-only or already-armed deterministic
-position-management mode from the redacted local configuration, starts/restarts the dashboard
-independently, and restarts a crashed or three-cadence-stalled loop at most three times. Every loop
-restart recovers durable decision epochs and reconciles before analysis, so it cannot fish for a
-new Terra answer or blindly retry an uncertain broker write. End of session is not restarted.
+It selects read-only, position-management-only, or explicitly armed autonomous PAPER mode from
+the redacted local configuration. Autonomous startup fails closed unless deterministic position
+management is armed and the owner-approved $2,000 session-loss limit is present. The watchdog
+starts/restarts the dashboard independently and restarts a crashed or three-cadence-stalled loop
+at most three times. Every loop restart recovers durable decision epochs and reconciles before
+analysis, so it cannot fish for a new Terra answer or blindly retry an uncertain broker write.
+End of session is not restarted.
 
 ## Demo and submission material
 

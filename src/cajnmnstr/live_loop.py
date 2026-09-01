@@ -16,8 +16,10 @@ from .models import EventType
 NEW_YORK = ZoneInfo("America/New_York")
 READ_ONLY_LOOP_CONFIRMATION = "PAPER_READ_ONLY_LOOP"
 POSITION_MANAGEMENT_LOOP_CONFIRMATION = "PAPER_POSITION_MANAGEMENT_LOOP"
+AUTONOMOUS_LOOP_CONFIRMATION = "PAPER_AUTONOMOUS_COMPETITION"
 DEFAULT_MONITOR_CADENCE_SECONDS = 60
 MINIMUM_MONITOR_CADENCE_SECONDS = 30
+ENTRY_RECOVERY_READY = frozenset({"ENTRY_READY", "ENTRY_ABORTED_RECOVERED"})
 
 
 class EvidenceCollector(Protocol):
@@ -46,6 +48,17 @@ class ContinuousLiveRunner(Protocol):
 
 class PositionManagementHandler(Protocol):
     def run_cycle(self, collection: LiveEvidenceCollection) -> str: ...
+
+
+class AutonomousEntryHandler(Protocol):
+    def reconcile(self, collection: LiveEvidenceCollection) -> str: ...
+
+    def submit(
+        self,
+        outcome: LiveDecisionOutcome,
+        *,
+        dashboard_path: Path | None = None,
+    ) -> object: ...
 
 
 class CompetitionSupervisorHandler(Protocol):
@@ -118,6 +131,7 @@ class ContinuousDecisionLoop:
         runner: ContinuousLiveRunner,
         *,
         position_manager: PositionManagementHandler | None = None,
+        entry_handler: AutonomousEntryHandler | None = None,
         supervisor: CompetitionSupervisorHandler | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -125,6 +139,7 @@ class ContinuousDecisionLoop:
         self.journal = journal
         self.runner = runner
         self.position_manager = position_manager
+        self.entry_handler = entry_handler
         self.supervisor = supervisor
         self._sleep = sleep
 
@@ -139,16 +154,31 @@ class ContinuousDecisionLoop:
     ) -> ContinuousLoopResult:
         self.settings.require_credentials()
         expected_confirmation = (
-            READ_ONLY_LOOP_CONFIRMATION
+            AUTONOMOUS_LOOP_CONFIRMATION
+            if self.entry_handler is not None
+            else READ_ONLY_LOOP_CONFIRMATION
             if self.position_manager is None
             else POSITION_MANAGEMENT_LOOP_CONFIRMATION
         )
         if confirmation != expected_confirmation:
-            raise ValueError(
-                f"Continuous monitoring requires --confirm {expected_confirmation}"
-            )
-        if self.settings.entry_enabled or self.settings.entry_armed:
+            raise ValueError(f"Continuous monitoring requires --confirm {expected_confirmation}")
+        if self.entry_handler is None and (
+            self.settings.entry_enabled or self.settings.entry_armed
+        ):
             raise ValueError("Read-only continuous monitoring requires entry authority disabled")
+        if self.entry_handler is not None:
+            if self.position_manager is None:
+                raise ValueError(
+                    "Autonomous entry requires the deterministic position-management handler"
+                )
+            if not self.settings.entry_armed:
+                raise ValueError("Autonomous PAPER entry authority is not explicitly armed")
+            if not self.settings.position_management_armed:
+                raise ValueError(
+                    "Autonomous PAPER entry requires armed deterministic position management"
+                )
+            if self.settings.session_loss_limit_usd is None:
+                raise ValueError("Autonomous PAPER entry requires a session-loss threshold")
         if self.position_manager is not None and not self.settings.position_management_armed:
             raise ValueError(
                 "Position-management loop requires explicitly armed PAPER position authority"
@@ -161,9 +191,7 @@ class ContinuousDecisionLoop:
             raise ValueError("max_cycles must be positive when supplied")
 
         self.journal.initialize()
-        evaluated_epochs = (
-            set() if self.supervisor is None else self.supervisor.evaluated_epochs()
-        )
+        evaluated_epochs = set() if self.supervisor is None else self.supervisor.evaluated_epochs()
         cycles = 0
         canonical_decisions = 0
         cached_decisions = 0
@@ -180,7 +208,11 @@ class ContinuousDecisionLoop:
                 last_epoch = epoch
                 state = "MONITORING"
                 decision_published = False
+                entry_submission_attempted = False
                 outcome: LiveDecisionOutcome | None = None
+                entry_state = (
+                    None if self.entry_handler is None else self.entry_handler.reconcile(collection)
+                )
                 management_state = (
                     None
                     if self.position_manager is None
@@ -221,6 +253,8 @@ class ContinuousDecisionLoop:
                         state = str(management_state)
                 elif management_state not in {None, "FLAT"}:
                     state = str(management_state)
+                elif entry_state is not None and entry_state not in ENTRY_RECOVERY_READY:
+                    state = entry_state
                 elif collection.open_orders or not collection.reconciliation.matched:
                     state = "BROKER_RECONCILIATION_REQUIRED"
                 elif collection.snapshot.hard_failures or collection.snapshot.stale_sources:
@@ -255,6 +289,15 @@ class ContinuousDecisionLoop:
                     cached_decisions += int(outcome.decision.ai_cached)
                     last_passport_id = outcome.decision.passport_id
                     state = outcome.decision.operator_review.state
+                    if state == "READY_FOR_OPERATOR_REVIEW" and self.entry_handler is not None:
+                        entry_result = self.entry_handler.submit(
+                            outcome,
+                            dashboard_path=dashboard_path,
+                        )
+                        entry_submission_attempted = bool(
+                            getattr(entry_result, "submission_attempted", False)
+                        )
+                        state = str(getattr(entry_result, "state", entry_result))
 
                 if not decision_published:
                     self.runner.publish_monitor_state(
@@ -276,6 +319,12 @@ class ContinuousDecisionLoop:
                     "EXIT_PENDING_RECONCILIATION",
                     "SUBMIT_UNKNOWN_RECONCILIATION_REQUIRED",
                     "EXIT_SUBMISSION_FAILED_RECONCILIATION_REQUIRED",
+                    "ENTRY_PENDING_FILL",
+                    "ENTRY_PARTIALLY_FILLED",
+                    "ENTRY_FILLED_PENDING_POSITION",
+                    "ENTRY_PENDING_RECONCILIATION",
+                    "ENTRY_RECONCILIATION_REQUIRED",
+                    "ENTRY_SUBMISSION_FAILED_RECONCILIATION_REQUIRED",
                 }
                 self.journal.append_event(
                     EventType.CONNECTION,
@@ -285,8 +334,9 @@ class ContinuousDecisionLoop:
                         "cycle": cycles,
                         "decision_epoch": epoch,
                         "state": state,
-                        "entry_enabled": False,
-                        "entry_submission_allowed": False,
+                        "entry_enabled": self.settings.entry_enabled,
+                        "entry_submission_allowed": entry_submission_attempted,
+                        "autonomous_entry_mode": self.entry_handler is not None,
                         "position_management_mode": self.position_manager is not None,
                         "position_management_submission_possible": (
                             self.position_manager is not None
@@ -361,9 +411,9 @@ class ContinuousDecisionLoop:
             terminal_state=terminal_state,
             last_epoch=last_epoch,
             last_passport_id=last_passport_id,
+            entry_submission_allowed=(self.entry_handler is not None and self.settings.entry_armed),
             position_management_mode=self.position_manager is not None,
             position_management_submission_possible=(
-                self.position_manager is not None
-                and self.settings.position_management_armed
+                self.position_manager is not None and self.settings.position_management_armed
             ),
         )

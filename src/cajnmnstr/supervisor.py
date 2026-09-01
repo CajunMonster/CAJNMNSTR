@@ -314,7 +314,11 @@ class CompetitionSupervisor:
                 "loop_advancing": False,
                 "loop_state": terminal_state,
                 "next_expected_action": (
-                    "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
+                    (
+                        "WAIT FOR NEXT REGULAR SESSION; PRESERVE AUTONOMOUS PAPER AUTHORITY"
+                        if self.settings.entry_armed
+                        else "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
+                    )
                     if terminal_state == "REGULAR_SESSION_COMPLETE"
                     else (
                         "OWNER REVIEW REQUIRED; DO NOT SUBMIT"
@@ -968,8 +972,8 @@ class CompetitionSupervisor:
             "broker_submission_allowed": False,
         }
 
-    @staticmethod
     def _next_action(
+        self,
         collection: LiveEvidenceCollection,
         alerts: list[SupervisorAlert],
         loop_state: str,
@@ -979,9 +983,19 @@ class CompetitionSupervisor:
         if collection.positions:
             return "CONTINUE DETERMINISTIC POSITION MANAGEMENT UNTIL BROKER-FLAT"
         if not collection.clock.is_open:
-            return "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
+            return (
+                "WAIT FOR NEXT REGULAR SESSION; PRESERVE AUTONOMOUS PAPER AUTHORITY"
+                if self.settings.entry_armed
+                else "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
+            )
+        if loop_state.startswith("ENTRY_") or loop_state.startswith("SUBMIT_UNKNOWN"):
+            return "RECONCILE ENTRY ORDER AND POSITION BEFORE ANY NEW DECISION"
         if loop_state == "READY_FOR_OPERATOR_REVIEW":
-            return "RECORD CANDIDATE; CONTINUE MONITORING WHILE ENTRY IS DISABLED"
+            return (
+                "APPLY IMMUTABLE PLAN AND DETERMINISTIC PAPER AUTHORITY"
+                if self.settings.entry_armed
+                else "RECORD CANDIDATE; CONTINUE MONITORING WHILE ENTRY IS DISABLED"
+            )
         return "MONITOR NEXT COMPLETED FIVE-MINUTE EVIDENCE EPOCH"
 
     def _persist_checkpoint(

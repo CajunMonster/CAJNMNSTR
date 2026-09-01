@@ -17,9 +17,11 @@ from .decision_cycle import (
     ReplayDecisionPipeline,
     results_summary,
 )
+from .entry_execution import AutonomousPaperEntryHandler
 from .health import HealthSupervisor, freshness_health
 from .journal import Journal
 from .live_loop import (
+    AUTONOMOUS_LOOP_CONFIRMATION,
     DEFAULT_MONITOR_CADENCE_SECONDS,
     ContinuousDecisionLoop,
 )
@@ -102,9 +104,7 @@ def _verify_terra(settings: Settings, path: Path) -> int:
         instructions=TERRA_FIXTURE_INSTRUCTIONS,
         evidence_json=_json(payload),
     )
-    passed = result.failure_code is None and result.resolved_model.startswith(
-        settings.openai_model
-    )
+    passed = result.failure_code is None and result.resolved_model.startswith(settings.openai_model)
     event_payload = {
         "status": "PASS" if passed else "FAIL_CLOSED",
         "fixture_id": payload.get("fixture_id"),
@@ -130,9 +130,7 @@ def _verify_terra(settings: Settings, path: Path) -> int:
         source="terra_fixture_verification",
         severity="INFO" if passed else "WARNING",
         payload=event_payload,
-        protective_action=(
-            None if passed else "ABSTAIN; do not create an actionable proposal."
-        ),
+        protective_action=(None if passed else "ABSTAIN; do not create an actionable proposal."),
     )
     print(_json(event_payload))
     return 0 if passed else 4
@@ -149,10 +147,7 @@ def _replay_cycle(settings: Settings, path: Path, *, live_terra: bool) -> int:
         scenarios = document.get("scenarios", [])
         if not isinstance(scenarios, list):
             raise ValueError("Decision-cycle scenarios must be a list")
-        proposals = {
-            str(item["scenario_id"]): item["fixture_proposal"]
-            for item in scenarios
-        }
+        proposals = {str(item["scenario_id"]): item["fixture_proposal"] for item in scenarios}
         provider = FixtureAnalysisProvider(proposals)
         analysis_mode = "CHECKED_IN_TERRA_SHAPED_FIXTURES"
 
@@ -220,8 +215,9 @@ def _live_loop(
     dashboard_path: Path,
     health_path: Path,
     manage_position: bool,
+    autonomous: bool,
 ) -> int:
-    """Run monitoring; optional broker writes are restricted to deterministic exits."""
+    """Run supervised monitoring with explicitly selected PAPER broker authority."""
     if not settings.ai_configured:
         raise ValueError("Terra must be configured for the continuous decision loop")
     journal = Journal(settings.journal_path)
@@ -233,7 +229,22 @@ def _live_loop(
         OpenAIResponsesAdapter(settings),
     )
     position_manager = None
-    if manage_position:
+    entry_handler = None
+    if autonomous and not manage_position:
+        raise ValueError("Autonomous entry requires --manage-position")
+    if autonomous:
+        entry_handler = AutonomousPaperEntryHandler(
+            settings,
+            journal,
+            adapter,
+            adapter,
+        )
+        position_manager = DeterministicPositionManager(
+            settings,
+            journal,
+            entry_handler.authority,
+        )
+    elif manage_position:
         coordinator = PaperExecutionCoordinator(
             settings,
             journal,
@@ -257,6 +268,7 @@ def _live_loop(
         journal,
         runner,
         position_manager=position_manager,
+        entry_handler=entry_handler,
         supervisor=CompetitionSupervisor(
             settings,
             journal,
@@ -423,12 +435,9 @@ def _chain_coverage(chain: list[Any]) -> dict[str, Any]:
         ),
         "quote_timestamp_count": sum(item.quote_at is not None for item in chain),
         "trade_timestamp_count": sum(item.trade_at is not None for item in chain),
-        "implied_volatility_count": sum(
-            item.implied_volatility is not None for item in chain
-        ),
+        "implied_volatility_count": sum(item.implied_volatility is not None for item in chain),
         "greeks": {
-            field: sum(getattr(item, field) is not None for item in chain)
-            for field in greek_fields
+            field: sum(getattr(item, field) is not None for item in chain) for field in greek_fields
         },
     }
 
@@ -607,9 +616,7 @@ def _verify_alpaca(settings: Settings, require_equity: Decimal) -> int:
         data_health_components = (quote_health, option_health)
         if any(component.state is HealthState.PAUSED for component in data_health_components):
             operational_health_state = HealthState.PAUSED
-        elif any(
-            component.state is HealthState.DEGRADED for component in data_health_components
-        ):
+        elif any(component.state is HealthState.DEGRADED for component in data_health_components):
             operational_health_state = HealthState.DEGRADED
         else:
             operational_health_state = HealthState.HEALTHY
@@ -773,17 +780,13 @@ def build_parser() -> argparse.ArgumentParser:
     health.add_argument("--live", action="store_true")
 
     fixture = subparsers.add_parser("fixture-check", help="Validate the option-chain fixture")
-    fixture.add_argument(
-        "--path", type=Path, default=Path("fixtures/alpaca/option-chain.json")
-    )
+    fixture.add_argument("--path", type=Path, default=Path("fixtures/alpaca/option-chain.json"))
     fixture.add_argument("--feed", default="indicative")
 
     terra = subparsers.add_parser(
         "verify-terra", help="Verify Terra with fixture/replay evidence only"
     )
-    terra.add_argument(
-        "--path", type=Path, default=Path("fixtures/ai/spy-weekend-replay.json")
-    )
+    terra.add_argument("--path", type=Path, default=Path("fixtures/ai/spy-weekend-replay.json"))
 
     replay = subparsers.add_parser(
         "replay-cycle",
@@ -822,7 +825,7 @@ def build_parser() -> argparse.ArgumentParser:
         "live-loop",
         help=(
             "Continuously monitor PAPER health and evaluate once per completed "
-            "five-minute evidence epoch; entry submission is always disabled"
+            "five-minute evidence epoch; broker entry requires explicit autonomous mode"
         ),
     )
     live_loop.add_argument("--confirm", required=True)
@@ -850,6 +853,14 @@ def build_parser() -> argparse.ArgumentParser:
             "only when separately armed and explicitly confirmed."
         ),
     )
+    live_loop.add_argument(
+        "--autonomous",
+        action="store_true",
+        help=(
+            "Permit deterministic PAPER entries after sealed authority and immutable-plan "
+            f"registration; requires --confirm {AUTONOMOUS_LOOP_CONFIRMATION}"
+        ),
+    )
 
     plan = subparsers.add_parser(
         "register-position-plan",
@@ -867,9 +878,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--rationale", required=True)
 
     mcp = subparsers.add_parser("mcp-config-check", help="Validate the read-only MCP example")
-    mcp.add_argument(
-        "--path", type=Path, default=Path("config/codex-mcp.example.toml")
-    )
+    mcp.add_argument("--path", type=Path, default=Path("config/codex-mcp.example.toml"))
 
     verify = subparsers.add_parser(
         "verify-alpaca", help="Run authenticated read-only paper-account verification"
@@ -903,6 +912,7 @@ def main(argv: list[str] | None = None) -> int:
             dashboard_path=args.dashboard_path,
             health_path=args.health_path,
             manage_position=args.manage_position,
+            autonomous=args.autonomous,
         )
     if args.command == "register-position-plan":
         return _register_position_plan(

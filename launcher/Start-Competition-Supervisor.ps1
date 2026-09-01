@@ -59,14 +59,21 @@ function Start-LocalDashboard {
     }
 }
 
-function Start-CompetitionLoop([bool]$managePosition) {
+function Start-CompetitionLoop([bool]$managePosition, [bool]$autonomous) {
     $arguments = @(
         'live-loop',
         '--cadence-seconds', '60',
         '--dashboard-path', $dashboardPath,
         '--health-path', $healthPath
     )
-    if ($managePosition) {
+    if ($autonomous) {
+        $arguments += @(
+            '--manage-position',
+            '--autonomous',
+            '--confirm', 'PAPER_AUTONOMOUS_COMPETITION'
+        )
+    }
+    elseif ($managePosition) {
         $arguments += @(
             '--manage-position',
             '--confirm', 'PAPER_POSITION_MANAGEMENT_LOOP'
@@ -97,17 +104,24 @@ if (-not (Test-Path -LiteralPath $cli)) {
 }
 New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
 $configuration = Read-RedactedConfiguration
-if ($configuration.entry_enabled -or $configuration.entry_armed) {
-    throw 'Competition Supervisor refuses to start while new-entry authority is enabled or armed.'
-}
 if ($configuration.broker_lock_active) {
     throw 'Competition Supervisor refuses to start while the hard broker lock is active.'
+}
+$autonomous = [bool]$configuration.entry_armed
+if ($configuration.entry_enabled -and -not $autonomous) {
+    throw 'Enabled entry authority is not fully armed; refusing ambiguous autonomous state.'
+}
+if ($autonomous -and -not $configuration.position_management_armed) {
+    throw 'Autonomous entry requires armed deterministic position management.'
+}
+if ($autonomous -and $configuration.session_loss_limit_usd -ne '2000') {
+    throw 'Autonomous competition mode requires the owner-approved $2,000 session limit.'
 }
 $managePosition = [bool]$configuration.position_management_armed
 Start-LocalDashboard
 
 $restartCount = 0
-$loop = Start-CompetitionLoop $managePosition
+$loop = Start-CompetitionLoop $managePosition $autonomous
 while ($true) {
     [pscustomobject]@{
         app = 'CAJNMNSTR'
@@ -116,7 +130,8 @@ while ($true) {
         loop_alive = -not $loop.HasExited
         restart_count = $restartCount
         checked_at = [DateTimeOffset]::UtcNow.ToString('o')
-        entry_enabled = $false
+        entry_enabled = [bool]$configuration.entry_enabled
+        autonomous_entry_mode = $autonomous
         broker_submission_allowed = $false
     } | ConvertTo-Json | Set-Content -LiteralPath $watchdogPath -Encoding utf8
 
@@ -145,11 +160,20 @@ while ($true) {
             break
         }
         $configuration = Read-RedactedConfiguration
-        if ($configuration.entry_enabled -or $configuration.entry_armed) {
-            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Entry authority changed during recovery.'
+        $autonomous = [bool]$configuration.entry_armed
+        if ($configuration.broker_lock_active) {
+            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Broker lock activated during recovery.'
+            break
+        }
+        if ($configuration.entry_enabled -and -not $autonomous) {
+            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Entry authority became ambiguous during recovery.'
+            break
+        }
+        if ($autonomous -and (-not $configuration.position_management_armed -or $configuration.session_loss_limit_usd -ne '2000')) {
+            Write-SupervisorIncident 'UNSAFE_AUTHORITY_STATE' 'Autonomous entry lost position-management or session-risk authority.'
             break
         }
         $managePosition = [bool]$configuration.position_management_armed
-        $loop = Start-CompetitionLoop $managePosition
+        $loop = Start-CompetitionLoop $managePosition $autonomous
     }
 }

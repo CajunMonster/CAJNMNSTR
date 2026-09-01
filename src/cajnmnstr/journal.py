@@ -154,12 +154,13 @@ SCHEMA_STATEMENTS = (
     ON journal_events(passport_id, occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_health_incidents_open
     ON health_incidents(component, opened_at) WHERE resolved_at IS NULL""",
-    """CREATE UNIQUE INDEX IF NOT EXISTS idx_position_lifecycles_active_symbol
-    ON position_lifecycles(symbol)
-    WHERE state != 'CLOSED_BROKER_FLAT'""",
     """CREATE INDEX IF NOT EXISTS idx_competition_checkpoints_created_at
     ON competition_checkpoints(created_at)""",
 )
+
+ACTIVE_LIFECYCLE_INDEX = """CREATE UNIQUE INDEX idx_position_lifecycles_active_symbol
+ON position_lifecycles(symbol)
+WHERE state NOT IN ('CLOSED_BROKER_FLAT', 'ENTRY_ABORTED')"""
 
 
 def utc_now() -> datetime:
@@ -202,6 +203,15 @@ class Journal:
             connection.execute("PRAGMA synchronous = FULL")
             for statement in SCHEMA_STATEMENTS:
                 connection.execute(statement)
+            active_index = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+                ("idx_position_lifecycles_active_symbol",),
+            ).fetchone()
+            if active_index is None or "ENTRY_ABORTED" not in str(active_index["sql"]):
+                connection.execute(
+                    "DROP INDEX IF EXISTS idx_position_lifecycles_active_symbol"
+                )
+                connection.execute(ACTIVE_LIFECYCLE_INDEX)
             connection.execute("PRAGMA optimize")
 
     def probe(self) -> None:
@@ -273,9 +283,7 @@ class Journal:
                 (passport_id,),
             ).fetchone()
             if passport is None or passport["state"] != "SEALED":
-                raise EvidenceStoreError(
-                    f"Referee result requires sealed Passport {passport_id}"
-                )
+                raise EvidenceStoreError(f"Referee result requires sealed Passport {passport_id}")
             try:
                 connection.execute(
                     """INSERT INTO referee_results
@@ -568,10 +576,7 @@ class Journal:
                 max_limit_price, reason_code, created_at, payload_json
                 FROM referee_results ORDER BY created_at, result_id"""
             ).fetchall()
-        return [
-            {**dict(row), "payload": json.loads(str(row["payload_json"]))}
-            for row in rows
-        ]
+        return [{**dict(row), "payload": json.loads(str(row["payload_json"]))} for row in rows]
 
     def all_position_lifecycles(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
@@ -630,10 +635,7 @@ class Journal:
                 payload_json FROM competition_checkpoints
                 ORDER BY created_at, checkpoint_id"""
             ).fetchall()
-        return [
-            {**dict(row), "payload": json.loads(str(row["payload_json"]))}
-            for row in rows
-        ]
+        return [{**dict(row), "payload": json.loads(str(row["payload_json"]))} for row in rows]
 
     def save_session_risk_state(self, payload: dict[str, Any]) -> bool:
         session_date = str(payload["session_date"])
@@ -643,9 +645,7 @@ class Journal:
                 "SELECT payload_json FROM session_risk_states WHERE session_date = ?",
                 (session_date,),
             ).fetchone()
-            prior_payload = (
-                None if prior is None else json.loads(str(prior["payload_json"]))
-            )
+            prior_payload = None if prior is None else json.loads(str(prior["payload_json"]))
             comparison = dict(payload)
             comparison.pop("evaluated_at", None)
             if prior_payload is not None:
@@ -703,8 +703,7 @@ class Journal:
                 "EXIT_PENDING_RECONCILIATION",
                 "SUBMIT_UNKNOWN",
             }
-            and record["payload"].get("intent", {}).get("position_intent")
-            == "sell_to_close"
+            and record["payload"].get("intent", {}).get("position_intent") == "sell_to_close"
             for record in self.broker_order_records()
         )
 
@@ -748,9 +747,7 @@ class Journal:
             "maximum_quantity": plan.maximum_quantity,
             "stop_loss_fraction": str(plan.stop_loss_fraction),
             "profit_target_fraction": (
-                None
-                if plan.profit_target_fraction is None
-                else str(plan.profit_target_fraction)
+                None if plan.profit_target_fraction is None else str(plan.profit_target_fraction)
             ),
             "invalidation": {
                 "feature_name": plan.invalidation.feature_name,
@@ -758,9 +755,7 @@ class Journal:
                 "threshold": str(plan.invalidation.threshold),
             },
             "invalidation_formula_version": plan.invalidation_formula_version,
-            "invalidation_inputs": [
-                [name, str(value)] for name, value in plan.invalidation_inputs
-            ],
+            "invalidation_inputs": [[name, str(value)] for name, value in plan.invalidation_inputs],
             "direction": plan.direction,
             "entry_referee_verdict": plan.entry_referee_verdict,
             "time_stop_duration_minutes": plan.time_stop_duration_minutes,
@@ -801,7 +796,8 @@ class Journal:
         with self._connect() as connection:
             row = connection.execute(
                 """SELECT * FROM position_lifecycles
-                WHERE symbol = ? AND state != 'CLOSED_BROKER_FLAT'
+                WHERE symbol = ?
+                  AND state NOT IN ('CLOSED_BROKER_FLAT', 'ENTRY_ABORTED')
                 ORDER BY created_at DESC LIMIT 1""",
                 (symbol,),
             ).fetchone()
@@ -811,7 +807,7 @@ class Journal:
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT * FROM position_lifecycles
-                WHERE state != 'CLOSED_BROKER_FLAT'
+                WHERE state NOT IN ('CLOSED_BROKER_FLAT', 'ENTRY_ABORTED')
                 ORDER BY created_at, plan_id"""
             ).fetchall()
         return [self._position_lifecycle_row(row) for row in rows]
@@ -947,8 +943,7 @@ class Journal:
             ),
             invalidation_formula_version=str(raw_plan["invalidation_formula_version"]),
             invalidation_inputs=tuple(
-                (str(name), Decimal(str(value)))
-                for name, value in raw_plan["invalidation_inputs"]
+                (str(name), Decimal(str(value))) for name, value in raw_plan["invalidation_inputs"]
             ),
             direction=str(raw_plan["direction"]),
             entry_referee_verdict=str(raw_plan["entry_referee_verdict"]),
@@ -961,9 +956,7 @@ class Journal:
             **dict(row),
             "plan": plan,
             "broker_quantity": (
-                None
-                if row["broker_quantity"] is None
-                else Decimal(str(row["broker_quantity"]))
+                None if row["broker_quantity"] is None else Decimal(str(row["broker_quantity"]))
             ),
             "lifecycle": json.loads(str(row["lifecycle_json"])),
         }
@@ -1017,9 +1010,7 @@ class Journal:
         return {
             **dict(row),
             "response": (
-                None
-                if row["response_json"] is None
-                else json.loads(str(row["response_json"]))
+                None if row["response_json"] is None else json.loads(str(row["response_json"]))
             ),
         }
 

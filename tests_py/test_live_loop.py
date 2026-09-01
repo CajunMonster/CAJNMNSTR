@@ -8,6 +8,7 @@ import pytest
 from cajnmnstr.config import EXECUTION_CONFIRMATION, PAPER_API_URL, Settings
 from cajnmnstr.journal import Journal
 from cajnmnstr.live_loop import (
+    AUTONOMOUS_LOOP_CONFIRMATION,
     POSITION_MANAGEMENT_LOOP_CONFIRMATION,
     READ_ONLY_LOOP_CONFIRMATION,
     ContinuousDecisionLoop,
@@ -112,6 +113,24 @@ class FakePositionManager:
     def run_cycle(self, item):
         self.calls.append(item)
         return self.states[len(self.calls) - 1]
+
+
+class FakeEntryHandler:
+    def __init__(self, reconcile_states=("ENTRY_READY",)):
+        self.reconcile_states = list(reconcile_states)
+        self.reconcile_calls = []
+        self.submit_calls = []
+
+    def reconcile(self, item):
+        self.reconcile_calls.append(item)
+        return self.reconcile_states[len(self.reconcile_calls) - 1]
+
+    def submit(self, outcome, *, dashboard_path=None):
+        self.submit_calls.append((outcome, dashboard_path))
+        return SimpleNamespace(
+            state="ENTRY_PENDING_FILL",
+            submission_attempted=True,
+        )
 
 
 class FakeSupervisor:
@@ -311,3 +330,56 @@ def test_position_management_loop_fails_before_collection_when_unarmed(tmp_path)
 
     assert runner.collector.index == 0
     assert manager.calls == []
+
+
+def test_autonomous_loop_submits_only_actionable_epoch_and_continues_no_trade(
+    tmp_path,
+) -> None:
+    app = replace(settings(tmp_path), entry_enabled=True)
+    runner = FakeRunner(
+        [collection(DECISION_AT), collection(DECISION_AT + timedelta(minutes=5))],
+        ["READY_FOR_OPERATOR_REVIEW", "NOT_ELIGIBLE"],
+    )
+    manager = FakePositionManager(["FLAT", "FLAT"])
+    entry = FakeEntryHandler(("ENTRY_READY", "ENTRY_READY"))
+
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        position_manager=manager,
+        entry_handler=entry,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=AUTONOMOUS_LOOP_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=2,
+    )
+
+    assert result.canonical_decisions == 2
+    assert result.entry_submission_allowed is True
+    assert len(entry.reconcile_calls) == 2
+    assert len(entry.submit_calls) == 1
+    assert len(manager.calls) == 2
+
+
+def test_autonomous_loop_requires_position_management_before_collection(tmp_path) -> None:
+    app = replace(settings(tmp_path), entry_enabled=True)
+    runner = FakeRunner([collection(DECISION_AT)], ["READY_FOR_OPERATOR_REVIEW"])
+    entry = FakeEntryHandler()
+
+    with pytest.raises(ValueError, match="position-management handler"):
+        ContinuousDecisionLoop(
+            app,
+            Journal(app.journal_path),
+            runner,
+            entry_handler=entry,
+            sleep=lambda _: None,
+        ).run(
+            confirmation=AUTONOMOUS_LOOP_CONFIRMATION,
+            cadence_seconds=30,
+            max_cycles=1,
+        )
+
+    assert runner.collector.index == 0
+    assert entry.reconcile_calls == []

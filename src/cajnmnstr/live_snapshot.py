@@ -563,6 +563,9 @@ def _dashboard_state(
         and components["option_quote"].state is HealthState.HEALTHY
         else "STALE"
     )
+    autonomous_armed = (
+        settings.entry_armed and settings.position_management_armed and not settings.broker_lock
+    )
     direction = decision.proposal.direction
     regime_state = (
         "BULLISH"
@@ -581,7 +584,11 @@ def _dashboard_state(
         "mode": "PAPER",
         "operational_state": health.state.value,
         "truth_label": (
-            "PAPER · FRESH SIP/OPRA · STOP BEFORE BROKER"
+            (
+                "PAPER · FRESH SIP/OPRA · AUTONOMOUS AUTHORITY CHECK"
+                if autonomous_armed
+                else "PAPER · FRESH SIP/OPRA · STOP BEFORE BROKER"
+            )
             if health.state is HealthState.HEALTHY
             else f"PAPER · {session} · NON-ACTIONABLE SAFE STOP"
         ),
@@ -740,8 +747,12 @@ def _dashboard_state(
             },
             {
                 "stage": "SUBMITTED",
-                "status": "STOPPED",
-                "detail": "Entry disabled; broker path absent",
+                "status": "PENDING AUTHORITY" if autonomous_armed else "STOPPED",
+                "detail": (
+                    "Awaiting immutable plan and deterministic entry authority"
+                    if autonomous_armed
+                    else "Entry disabled; broker path absent"
+                ),
             },
             {"stage": "FILLED", "status": "NOT STARTED", "detail": "No broker order"},
             {"stage": "EXIT", "status": "NOT STARTED", "detail": "No lifecycle change"},
@@ -749,8 +760,12 @@ def _dashboard_state(
         "activity": [
             {
                 "time": health.checked_at.astimezone(NEW_YORK).strftime("%H:%M:%S"),
-                "kind": "STOP",
-                "text": "Sealed Passport · broker submission false",
+                "kind": "AUTHORITY" if autonomous_armed else "STOP",
+                "text": (
+                    "Sealed Passport · autonomous authority pending"
+                    if autonomous_armed
+                    else "Sealed Passport · broker submission false"
+                ),
                 "mode": "PAPER",
             },
             {
@@ -826,6 +841,11 @@ def _monitor_dashboard_state(
         and components["option_quote"].state is HealthState.HEALTHY
         else "STALE"
     )
+    authority_label = (
+        "AUTONOMOUS ARMED"
+        if settings.entry_armed and settings.position_management_armed
+        else "ENTRY DISABLED"
+    )
     now_iso = health.checked_at.isoformat()
     blockers = [
         item.component for item in health.components if item.state is not HealthState.HEALTHY
@@ -844,7 +864,7 @@ def _monitor_dashboard_state(
         "schema_version": 1,
         "mode": "PAPER",
         "operational_state": health.state.value,
-        "truth_label": f"PAPER · {session} · MONITORING · NO DECISION",
+        "truth_label": (f"PAPER · {session} · MONITORING · {authority_label}"),
         "updated_at": now_iso,
         "controls": {
             "entry_enabled": settings.entry_enabled,
@@ -867,9 +887,7 @@ def _monitor_dashboard_state(
                 "label": "SIP MARKET DATA",
                 "value": data_state,
                 "state": (
-                    "verified"
-                    if components["spy_quote"].state is HealthState.HEALTHY
-                    else "paused"
+                    "verified" if components["spy_quote"].state is HealthState.HEALTHY else "paused"
                 ),
                 "detail": components["spy_quote"].message,
             },
@@ -968,11 +986,7 @@ def _monitor_dashboard_state(
         },
         "decision": {
             "verdict": "NOT_EVALUATED",
-            "state": (
-                "MONITORING"
-                if health.state is HealthState.HEALTHY
-                else "MONITORING_PAUSED"
-            ),
+            "state": ("MONITORING" if health.state is HealthState.HEALTHY else "MONITORING_PAUSED"),
             "symbol": None,
             "contract_label": None,
             "expiration": None,
@@ -1056,7 +1070,11 @@ def write_health_state(
 ) -> None:
     payload = {
         **health.to_dict(),
-        "mode": "PAPER_READ_ONLY",
+        "mode": (
+            "PAPER_AUTONOMOUS_ARMED"
+            if settings.entry_armed and settings.position_management_armed
+            else "PAPER_READ_ONLY"
+        ),
         "entry_enabled": settings.entry_enabled,
         "position_management_enabled": settings.position_management_enabled,
         "broker_submission_allowed": False,
@@ -1068,7 +1086,7 @@ def write_health_state(
 
 
 class LiveDecisionRunner:
-    """Read-only live path that deliberately has no execution coordinator dependency."""
+    """Build live authority evidence without holding a broker mutation dependency."""
 
     def __init__(
         self,
@@ -1080,7 +1098,12 @@ class LiveDecisionRunner:
         self.settings = settings
         self.journal = journal
         self.collector = LiveEvidenceCollector(settings, journal, reader)
-        self.pipeline = ReplayDecisionPipeline(settings, journal, analysis_provider)
+        self.pipeline = ReplayDecisionPipeline(
+            settings,
+            journal,
+            analysis_provider,
+            permit_live_entry_authority=True,
+        )
         self.session_risk = SessionRiskAuthority(settings, journal)
 
     def run(

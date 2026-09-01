@@ -75,15 +75,26 @@ fresh SIP/OPRA, successful reconciliation, a sealed Passport, and
 `READY_FOR_OPERATOR_REVIEW`; even then entry authority remains disabled and the command stops
 before broker submission.
 
-The optional continuous PAPER controller polls component and broker health every 60
-seconds and defines a decision epoch by the newest completed regular-session five-minute bar. It
-invokes Terra once per new actionable epoch, journals non-actionable evidence and `NO_TRADE` /
-`ABSTAIN` / `BLOCK`, and pauses when a candidate reaches `READY_FOR_OPERATOR_REVIEW`. The loop
-rejects enabled entry authority in every mode. `PAPER_READ_ONLY_LOOP` has no broker-submission
-path. `PAPER_POSITION_MANAGEMENT_LOOP` attaches the deterministic manager and requires the
-separate PAPER confirmation and armed position authority. New-entry analysis stops while a
-position exists, but management continues independently of Terra. The manager can submit only
-`sell_to_close`; it never improvises an exit or treats missing position management as safe.
+The optional continuous PAPER controller polls component and broker health every 60 seconds and
+defines a decision epoch by the newest completed regular-session five-minute bar. It invokes Terra
+once per new actionable epoch and journals non-actionable evidence and `NO_TRADE` / `ABSTAIN` /
+`BLOCK`. `PAPER_READ_ONLY_LOOP` has no broker-submission path.
+`PAPER_POSITION_MANAGEMENT_LOOP` attaches the deterministic manager and requires the separate
+PAPER confirmation and armed position authority. `PAPER_AUTONOMOUS_COMPETITION` additionally
+requires armed entry authority, armed position management, a clear broker lock, and a configured
+session-loss limit. On `READY_FOR_OPERATOR_REVIEW`, that mode reproduces the frozen position plan
+from sealed evidence and may invoke the existing authority/coordinator path exactly once. New-entry
+analysis stops while an entry order or position is unresolved, and management continues
+independently of Terra. The manager can submit only `sell_to_close`; it never improvises an exit or
+treats missing position management as safe.
+
+The autonomous handler does not select a symbol, contract, direction, size, premium, or exit
+threshold. It validates that the candidate exactly matches the sealed selector output, registers
+the owner-approved immutable plan, and delegates to the existing operator authority path. Durable
+client-order state is reserved before the broker write. `SUBMIT_UNKNOWN` and other uncertainty
+require reconciliation and cannot be retried blindly. Terminally rejected or expired unfilled
+entries transition to `ENTRY_ABORTED`, which releases the one-position slot without claiming a
+completed trade or broker-flat position lifecycle.
 
 The Competition Supervisor is an observational wrapper, not another decision agent. It consumes
 the loop's existing health, reconciliation, journal, lifecycle, and dashboard telemetry; persists

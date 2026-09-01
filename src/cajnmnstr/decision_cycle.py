@@ -255,9 +255,7 @@ class FixtureAnalysisProvider:
             resolved_model=self.model_name,
             proposal=proposal,
             authority_disposition=(
-                "ABSTAIN"
-                if proposal.direction is ProposalDirection.NO_TRADE
-                else "PROPOSAL_ONLY"
+                "ABSTAIN" if proposal.direction is ProposalDirection.NO_TRADE else "PROPOSAL_ONLY"
             ),
             failure_code=None,
             failure_detail=None,
@@ -444,9 +442,7 @@ class EvidenceCalculator:
             realized_volatility = (
                 None
                 if len(log_returns) < 2
-                else Decimal(
-                    str(statistics.pstdev(log_returns) * math.sqrt(19656))
-                )
+                else Decimal(str(statistics.pstdev(log_returns) * math.sqrt(19656)))
             )
             add_feature(
                 "feature:realized_volatility",
@@ -498,9 +494,7 @@ class EvidenceCalculator:
                 if item is not None and item.implied_volatility is not None
             ]
             atm_iv = (
-                None
-                if not atm_values
-                else sum(atm_values, Decimal("0")) / Decimal(len(atm_values))
+                None if not atm_values else sum(atm_values, Decimal("0")) / Decimal(len(atm_values))
             )
             add_feature("feature:atm_iv", "atm_iv", atm_iv, "ratio")
             simple_skew = None
@@ -521,11 +515,7 @@ class EvidenceCalculator:
         if events is None:
             event_state = "UNAVAILABLE"
         else:
-            event_state = (
-                "CLEAR"
-                if not events
-                else ", ".join(str(item["name"]) for item in events)
-            )
+            event_state = "CLEAR" if not events else ", ".join(str(item["name"]) for item in events)
         add_feature(
             "context:event_calendar",
             "event_calendar_state",
@@ -704,16 +694,10 @@ class ReplayRefereePolicy:
         location = snapshot.features.get("day_range_location")
         if isinstance(location, Decimal):
             bullish.append(
-                1
-                if location >= Decimal("0.60")
-                else -1
-                if location <= Decimal("0.40")
-                else 0
+                1 if location >= Decimal("0.60") else -1 if location <= Decimal("0.40") else 0
             )
         directional = (
-            bullish
-            if direction is ProposalDirection.LONG_CALL
-            else [-item for item in bullish]
+            bullish if direction is ProposalDirection.LONG_CALL else [-item for item in bullish]
         )
         return sum(item > 0 for item in directional), sum(item < 0 for item in directional)
 
@@ -772,12 +756,14 @@ class ReplayOptionSelector:
                     for value in (item.delta, item.gamma, item.theta, item.vega, item.rho)
                 ):
                     reason = "MISSING_GREEKS"
-                elif any(
-                    not value.is_finite()
-                    for value in (item.delta, item.gamma, item.theta, item.vega, item.rho)
-                    if value is not None
-                ) or (item.gamma is not None and item.gamma < 0) or (
-                    item.vega is not None and item.vega < 0
+                elif (
+                    any(
+                        not value.is_finite()
+                        for value in (item.delta, item.gamma, item.theta, item.vega, item.rho)
+                        if value is not None
+                    )
+                    or (item.gamma is not None and item.gamma < 0)
+                    or (item.vega is not None and item.vega < 0)
                 ):
                     reason = "INVALID_GREEKS"
                 elif (
@@ -895,10 +881,6 @@ class OperatorReviewGate:
     """Confirms review eligibility without reserving identity or invoking a coordinator."""
 
     def __init__(self, settings: Settings, journal: Journal) -> None:
-        if settings.entry_enabled or settings.entry_armed:
-            raise ConfigurationError(
-                "Decision review requires entry authority disabled and unarmed"
-            )
         self.settings = settings
         self.journal = journal
 
@@ -966,9 +948,7 @@ class OperatorReviewGate:
             ),
             passport_id=passport_id,
             correlation_id=(
-                None
-                if selection.candidate is None
-                else selection.candidate.client_order_id
+                None if selection.candidate is None else selection.candidate.client_order_id
             ),
             severity="INFO" if result.state == "READY_FOR_OPERATOR_REVIEW" else "WARNING",
             payload={
@@ -992,8 +972,10 @@ class ReplayDecisionPipeline:
         settings: Settings,
         journal: Journal,
         analysis_provider: AnalysisProvider,
+        *,
+        permit_live_entry_authority: bool = False,
     ) -> None:
-        if settings.entry_enabled or settings.entry_armed:
+        if (settings.entry_enabled or settings.entry_armed) and not permit_live_entry_authority:
             raise ConfigurationError(
                 "Replay pipeline requires entry authority disabled and unarmed"
             )
@@ -1006,6 +988,10 @@ class ReplayDecisionPipeline:
         self.review_gate = OperatorReviewGate(settings, journal)
 
     def run_document(self, document: dict[str, Any]) -> list[ReplayDecisionResult]:
+        if self.settings.entry_enabled or self.settings.entry_armed:
+            raise ConfigurationError(
+                "Replay fixtures cannot run while live entry authority is enabled"
+            )
         if document.get("replay") is not True or document.get("execution_allowed") is not False:
             raise ValueError("Decision cycle accepts only execution-disabled replay fixtures")
         self.journal.initialize()
@@ -1032,6 +1018,12 @@ class ReplayDecisionPipeline:
         prompt_version: str,
     ) -> ReplayDecisionResult:
         """Run one normalized snapshot through Terra, Referee, selector, and safe review."""
+        if (
+            self.settings.entry_enabled or self.settings.entry_armed
+        ) and snapshot.source_mode == "REPLAY_ONLY":
+            raise ConfigurationError(
+                "Replay evidence cannot produce authority while live entry is enabled"
+            )
         self.journal.initialize()
         self.journal.probe()
         mode_label = "replay" if snapshot.source_mode == "REPLAY_ONLY" else "live"
@@ -1327,9 +1319,7 @@ class ReplayDecisionPipeline:
 
 def replay_distribution(results: list[ReplayDecisionResult]) -> dict[str, int]:
     distribution = {
-        verdict.value: 0
-        for verdict in RefereeVerdict
-        if verdict is not RefereeVerdict.EXIT
+        verdict.value: 0 for verdict in RefereeVerdict if verdict is not RefereeVerdict.EXIT
     }
     for result in results:
         distribution[result.referee.verdict.value] += 1

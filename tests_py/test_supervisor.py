@@ -405,14 +405,16 @@ def test_realized_pnl_uses_durable_entry_and_execution_quality(tmp_path: Path) -
     assert monitor._realized_pnl(lifecycle) == Decimal("140.00")
 
 
-def test_watchdog_is_bounded_and_never_grants_entry_authority() -> None:
+def test_watchdog_is_bounded_and_requires_explicit_autonomous_authority() -> None:
     script = (
         Path(__file__).parents[1]
         / "launcher"
         / "Start-Competition-Supervisor.ps1"
     ).read_text(encoding="utf-8")
     assert "MaximumRestarts = 3" in script
-    assert "entry_enabled -or $configuration.entry_armed" in script
+    assert "PAPER_AUTONOMOUS_COMPETITION" in script
+    assert "position_management_armed" in script
+    assert "session_loss_limit_usd -ne '2000'" in script
     assert "PAPER_POSITION_MANAGEMENT_LOOP" in script
     assert "PAPER_READ_ONLY_LOOP" in script
     assert "broker_submission_allowed = $false" in script
