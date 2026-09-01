@@ -44,7 +44,9 @@ and reviewed before a new deployment.
 
 ## Architecture
 
-- **Alpaca MCP Server v2** supplies AI-facing market context with only `assets`, `stock-data`, `options-data`, and `news`.
+- **Alpaca MCP Server v2.3.0** is locally registered as a read-oriented AI/developer
+  integration with only `assets`, `stock-data`, `options-data`, and `news`. It is not the broker
+  execution path.
 - **alpaca-py / Trading API** supplies deterministic paper account access, SPY/options reads, order submission, lifecycle lookup, positions, and reconciliation.
 - **SQLite Evidence Journal** stores Passports, health incidents, order identities, broker lifecycle events, and reconciliation under `CAJNMNSTR_DATA_ROOT`.
 - **Operator Authority Path** is the sole bridge from a sealed Passport and deterministic Referee result to the execution coordinator; every allow or denial is journaled.
@@ -63,7 +65,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the authority boundary,
 measured verdicts, [docs/OPRA_ENTITLEMENT.md](docs/OPRA_ENTITLEMENT.md) for the verified SIP/OPRA
 entitlement, and [docs/TONIGHT_OWNER_CHECKLIST.md](docs/TONIGHT_OWNER_CHECKLIST.md) for the
 credential and first-test sequence. A concise competition narrative is available in
-[docs/SUBMISSION_WRITEUP.md](docs/SUBMISSION_WRITEUP.md).
+[docs/SUBMISSION_WRITEUP.md](docs/SUBMISSION_WRITEUP.md). The sanitized MCP runtime proof is in
+[docs/ALPACA_MCP_VERIFICATION.md](docs/ALPACA_MCP_VERIFICATION.md).
 
 ## Scope and limitations
 
@@ -95,9 +98,15 @@ uv run cajnmnstr verify-terra
 uv run cajnmnstr replay-cycle
 uv run cajnmnstr mcp-config-check
 uv run cajnmnstr mcp-config-check --path config/alpaca-mcp.example.json
+uv run python scripts/verify_alpaca_mcp_readonly.py
 ```
 
 Never commit `.env.local`, MCP client credentials, runtime logs, broker IDs, screenshots containing secrets, or the external evidence store.
+
+The local Codex registration starts `launcher/Start-Alpaca-Mcp-Readonly.ps1`. That launcher reads
+only the two Alpaca credential settings from the ignored `.env.local`, pins PAPER mode and the
+four read-oriented toolsets, and passes them to the official STDIO server without placing secret
+values in Codex configuration. Restart Codex after adding or changing an MCP registration.
 
 ## Validation
 

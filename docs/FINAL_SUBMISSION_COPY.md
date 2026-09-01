@@ -105,8 +105,9 @@ appears. CAJNMNSTR makes no unproven prediction-accuracy claim.
 
 - **Alpaca Trading API / `alpaca-py`:** authenticated PAPER account, market clock, SIP and OPRA
   reads, deterministic order handling, positions, order lookup, and reconciliation.
-- **Alpaca MCP Server v2:** restricted to read-oriented asset, stock-data, options-data, and news
-  toolsets. Trading and account-management toolsets are not exposed to the AI.
+- **Alpaca MCP Server v2.3.0:** locally registered and authenticated in PAPER mode, with a
+  successful market-clock proof. It is restricted to read-oriented asset, stock-data,
+  options-data, and news toolsets; account, order, position, and broker-write tools are absent.
 - **Dedicated judging account:** a verified $100,000 Alpaca PAPER account. No account ID or
   credential belongs in submission material.
 - **Market data:** SIP equities and OPRA options through the verified Algo Trader Plus entitlement.
@@ -147,7 +148,7 @@ strongly as practical for this workload.
 ## 11. Technology list
 
 - Alpaca Trading API and `alpaca-py`
-- Alpaca MCP Server v2
+- Alpaca MCP Server v2.3.0, locally verified and restricted to read-oriented market toolsets
 - SIP equities market data
 - OPRA options market data
 - Algo Trader Plus

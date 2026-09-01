@@ -35,8 +35,11 @@ health, and a unique client-order identity recorded before broker submission.
 ## Alpaca infrastructure
 
 Alpaca's Trading API and `alpaca-py` provide PAPER account state, clock, SIP equity data, OPRA
-option snapshots, deterministic order handling, positions, and broker reconciliation. The Alpaca
-MCP Server is restricted to read-oriented market toolsets and exposes no trading tools to the AI.
+option snapshots, deterministic order handling, positions, and broker reconciliation. Separately,
+the locally registered official Alpaca MCP Server v2.3.0 provides a read-oriented AI/developer
+integration restricted to asset, stock-data, options-data, and news toolsets. An authenticated
+PAPER market-clock call proved the MCP runtime path; its exposed tool inventory contained no
+account, order, position, or broker-write tools. MCP is not CAJNMNSTR's execution path.
 Order-submit uncertainty becomes `SUBMIT_UNKNOWN` and requires reconciliation rather than a blind
 retry. A submitted exit is not considered complete until Alpaca positions prove the account is
 flat.

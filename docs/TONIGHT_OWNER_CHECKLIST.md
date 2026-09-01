@@ -14,10 +14,13 @@ Keep credentials on this computer. Do not paste credentials into chat, screensho
 - [ ] Set `CAJNMNSTR_ENTRY_ENABLED=false`, `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED=true`, and `CAJNMNSTR_BROKER_LOCK=false`; remove the deprecated `CAJNMNSTR_EXECUTION_ENABLED` alias after migration.
 - [ ] Leave `CAJNMNSTR_EXECUTION_CONFIRMATION` blank until the controlled order window.
 - [ ] Set the actual stock/options feeds and `ALPACA_DATA_ENTITLEMENT` only after verification.
-- [ ] Set `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` in the owner's local environment. Do not add their values to any checked-in file.
-- [ ] Copy the single server table from `config/codex-mcp.example.toml` into the owner's local Codex `~/.codex/config.toml` (or add it through **Settings → MCP servers**). Keep its exact four-toolset allowlist.
-- [ ] Run `.venv\Scripts\cajnmnstr.exe mcp-config-check`; confirm the secret-free Codex example reports `ok`.
-- [ ] Change only that local server's `enabled` value to `true`, restart Codex, and verify the server exposes only permitted read-oriented market tools. If any account/trading/watchlist/locate tool appears, disable it immediately.
+- [x] Register the secret-free `alpaca_market_readonly` STDIO launcher in the owner's local Codex
+  configuration. Credentials remain in the ignored `.env.local` and are supplied only to the MCP
+  child process.
+- [x] Validate both checked-in MCP templates and the exact four-toolset allowlist.
+- [x] Prove the registered official v2.3.0 runtime with one authenticated PAPER `get_clock` call;
+  verify that account, order, position, and broker-write tools are absent.
+- [ ] Restart Codex after MCP registration so a fresh client session discovers the v2 tool list.
 
 ## B. Read-only verification
 
