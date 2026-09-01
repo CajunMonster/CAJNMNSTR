@@ -3,7 +3,7 @@
   "mode": "PAPER",
   "operational_state": "PAUSED",
   "truth_label": "PAPER · MARKET CLOSED · MONITORING · NO DECISION",
-  "updated_at": "2026-08-31T23:30:08.620648+00:00",
+  "updated_at": "2026-09-01T00:44:52.762144+00:00",
   "controls": {
     "entry_enabled": false,
     "entry_armed": false,
@@ -24,15 +24,15 @@
       "id": "sip",
       "label": "SIP MARKET DATA",
       "value": "STALE",
-      "state": "verified",
-      "detail": "Data age 6.7s is within policy."
+      "state": "paused",
+      "detail": "Data is stale or time-inconsistent (age 2692.5s)."
     },
     {
       "id": "opra",
       "label": "OPRA OPTIONS",
       "value": "STALE",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 12608.6s)."
+      "detail": "Data is stale or time-inconsistent (age 17092.8s)."
     },
     {
       "id": "terra",
@@ -57,16 +57,16 @@
     "open_pl": 0.0,
     "position_count": 0,
     "open_order_count": 0,
-    "as_of": "2026-08-31T23:30:08.620648+00:00",
+    "as_of": "2026-09-01T00:44:52.762144+00:00",
     "source": "Authenticated Alpaca PAPER read-only"
   },
   "market": {
     "symbol": "SPY",
-    "price": 767.39,
+    "price": 767.535,
     "previous_close": 769.35,
-    "change": -1.96,
-    "change_percent": -0.2547605121206213,
-    "last_update": "2026-08-31T23:30:01.969193+00:00",
+    "change": -1.815,
+    "change_percent": -0.23591343341782023,
+    "last_update": "2026-09-01T00:00:00.220219+00:00",
     "session": "MARKET CLOSED",
     "data_state": "STALE",
     "feed": "ALPACA SIP",
@@ -175,26 +175,26 @@
     "feed": "OPRA",
     "status": "AUTHORIZED · STALE",
     "chain_health": "VALID",
-    "atm_iv": 9.505,
-    "skew": 1.69,
+    "atm_iv": 9.535,
+    "skew": 0.89,
     "skew_reason": "Same-strike skew",
     "last_update": "2026-08-31T19:59:59.999962+00:00",
     "surface": [
       {
-        "label": "C00769000",
-        "value": 10.59
-      },
-      {
-        "label": "P00769000",
-        "value": 13.13
-      },
-      {
         "label": "C00768000",
-        "value": 8.59
+        "value": 10.46
       },
       {
         "label": "P00768000",
-        "value": 10.24
+        "value": 10.86
+      },
+      {
+        "label": "P00768000",
+        "value": 10.37
+      },
+      {
+        "label": "C00768000",
+        "value": 9.67
       }
     ]
   },
@@ -222,13 +222,14 @@
     "uncertainty": "NOT_EVALUATED",
     "reasons": [
       "market_session",
+      "spy_quote",
       "option_quote",
       "evidence_snapshot"
     ]
   },
   "passport": {
     "id": null,
-    "fixture_id": "alpaca-paper-20260831T233008Z",
+    "fixture_id": "alpaca-paper-20260901T004452Z",
     "sealed": false,
     "source": "No Passport created for this monitoring-only cycle"
   },
@@ -261,7 +262,7 @@
   ],
   "activity": [
     {
-      "time": "19:30:08",
+      "time": "20:44:52",
       "kind": "MONITOR",
       "text": "MARKET CLOSED · broker reconciled · no decision",
       "mode": "PAPER"
@@ -289,14 +290,14 @@
     {
       "id": "spy_quote",
       "label": "SPY QUOTE",
-      "state": "HEALTHY",
-      "detail": "Data age 6.7s is within policy."
+      "state": "PAUSED",
+      "detail": "Data is stale or time-inconsistent (age 2692.5s)."
     },
     {
       "id": "option_quote",
       "label": "OPTION QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 12608.6s)."
+      "detail": "Data is stale or time-inconsistent (age 17092.8s)."
     },
     {
       "id": "ai_provider",
@@ -304,5 +305,74 @@
       "state": "HEALTHY",
       "detail": "Terra is configured and was intentionally not invoked for this cycle."
     }
-  ]
+  ],
+  "supervisor": {
+    "version": 2,
+    "updated_at": "2026-09-01T00:44:52.826535+00:00",
+    "system_state": "PAUSED",
+    "loop_advancing": true,
+    "latest_completed_epoch": "2026-08-31T20:00:00+00:00",
+    "loop_state": "NON_ACTIONABLE_EVIDENCE",
+    "broker_reconciled": true,
+    "sip": "STALE",
+    "opra": "STALE",
+    "entry_authority": "DISABLED",
+    "position_management": "DISABLED_OR_UNARMED",
+    "broker_lock": "CLEAR",
+    "position_count": 0,
+    "open_order_count": 0,
+    "alerts": [],
+    "recoveries": [],
+    "behavioral_warnings": [],
+    "metrics": {
+      "decision_epochs": 5,
+      "terra_long_call": 0,
+      "terra_long_put": 0,
+      "terra_no_trade": 5,
+      "referee_approve": 0,
+      "referee_reduce": 0,
+      "referee_abstain": 1,
+      "referee_block": 4,
+      "actionable_candidates": 0,
+      "trades_submitted": 0,
+      "fills": 0,
+      "completed_positions": 0,
+      "wins": 0,
+      "losses": 0,
+      "realized_pnl": 0.0,
+      "unrealized_pnl": 0.0,
+      "current_equity": 100000.0,
+      "peak_equity": 100000.0,
+      "max_drawdown_fraction": 0.0,
+      "capital_deployed": 0.0,
+      "average_capital_deployed": 0.0,
+      "average_winner": null,
+      "average_loser": null,
+      "profit_factor": null,
+      "average_holding_minutes": null,
+      "average_quoted_spread_percent": null,
+      "average_fill_vs_midpoint": null,
+      "risk_stop_exits": 0,
+      "entry_identity_violation": false,
+      "risk_limit_warning_active": false,
+      "top_refusal_reasons": [
+        {
+          "reason": "STALE_REPLAY_EVIDENCE",
+          "count": 2
+        },
+        {
+          "reason": "STALE_EVIDENCE",
+          "count": 2
+        },
+        {
+          "reason": "AI_NO_TRADE",
+          "count": 1
+        }
+      ],
+      "incident_count": 47,
+      "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance."
+    },
+    "next_expected_action": "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED",
+    "broker_submission_allowed": false
+  }
 }

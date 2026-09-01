@@ -1,7 +1,7 @@
 {
   "app": "CAJNMNSTR",
   "state": "PAUSED",
-  "checked_at": "2026-08-31T23:30:08.620648+00:00",
+  "checked_at": "2026-09-01T00:44:52.762144+00:00",
   "entry_armed": false,
   "position_management_armed": false,
   "broker_lock_active": false,
@@ -11,91 +11,91 @@
       "state": "HEALTHY",
       "message": "Paper endpoint with SIP and OPRA is configured.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "evidence_store",
       "state": "HEALTHY",
       "message": "Evidence journal initialized and probed.",
       "protective_action": "No protective action required.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "alpaca",
       "state": "HEALTHY",
       "message": "Authenticated paper account reads completed.",
       "protective_action": "No protective action required.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "broker_state",
       "state": "HEALTHY",
       "message": "Broker account is active, flat, and has no open orders.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "broker_reconciliation",
       "state": "HEALTHY",
       "message": "Durable and Alpaca broker identities reconcile.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "market_session",
       "state": "PAUSED",
       "message": "Market is closed.",
       "protective_action": "Wait for an executable regular session.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "spy_quote",
-      "state": "HEALTHY",
-      "message": "Data age 6.7s is within policy.",
-      "protective_action": "No protective action required.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "state": "PAUSED",
+      "message": "Data is stale or time-inconsistent (age 2692.5s).",
+      "protective_action": "Pause proposals and block order submission until fresh data is verified.",
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "option_quote",
       "state": "PAUSED",
-      "message": "Data is stale or time-inconsistent (age 12608.6s).",
+      "message": "Data is stale or time-inconsistent (age 17092.8s).",
       "protective_action": "Pause proposals and block order submission until fresh data is verified.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "risk_limits",
       "state": "HEALTHY",
       "message": "Risk thresholds are unchanged and the account is flat.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "ai_provider",
       "state": "HEALTHY",
       "message": "Terra is configured and was intentionally not invoked for this cycle.",
       "protective_action": "ABSTAIN and keep broker submission prohibited.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "news",
       "state": "HEALTHY",
       "message": "No approved live news input was available; none was invented.",
       "protective_action": "No protective action required.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "event_calendar",
       "state": "HEALTHY",
       "message": "No approved live event-calendar input was available; state is UNAVAILABLE.",
       "protective_action": "No protective action required.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     },
     {
       "component": "evidence_snapshot",
       "state": "PAUSED",
       "message": "Normalized Evidence Snapshot is stale or incomplete.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-08-31T23:30:08.620648+00:00"
+      "checked_at": "2026-09-01T00:44:52.762144+00:00"
     }
   ],
   "mode": "PAPER_READ_ONLY",

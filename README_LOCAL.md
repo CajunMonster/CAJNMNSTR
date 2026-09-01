@@ -14,6 +14,8 @@ This is the local CAJNMNSTR dashboard and paper-integration preparation workspac
 - Order submission remains disabled behind an explicit two-part paper-only gate.
 - The desktop shortcut starts the page on `127.0.0.1:8841` and opens it in the default browser.
 - If another application owns port 8841, the launcher reports the conflict and does not stop that process.
+- `launcher\Start-Competition-Supervisor.ps1` runs the existing loop under a bounded watchdog,
+  persists checkpoints, and can recover the dashboard without granting new-entry authority.
 
 Use the navigation rail to inspect the command dashboard, Evidence Passport, journal, and system-isolation view.
 

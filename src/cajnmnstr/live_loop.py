@@ -48,6 +48,29 @@ class PositionManagementHandler(Protocol):
     def run_cycle(self, collection: LiveEvidenceCollection) -> str: ...
 
 
+class CompetitionSupervisorHandler(Protocol):
+    def evaluated_epochs(self) -> set[str]: ...
+
+    def observe_cycle(
+        self,
+        collection: LiveEvidenceCollection,
+        *,
+        decision_epoch: str | None,
+        loop_state: str,
+        outcome: LiveDecisionOutcome | None,
+        dashboard_path: Path | None,
+        position_manager_attached: bool,
+    ) -> dict[str, object]: ...
+
+    def observe_failure(
+        self,
+        error: Exception,
+        *,
+        cycle: int,
+        dashboard_path: Path | None,
+    ) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ContinuousLoopResult:
     cycles: int
@@ -88,12 +111,14 @@ class ContinuousDecisionLoop:
         runner: ContinuousLiveRunner,
         *,
         position_manager: PositionManagementHandler | None = None,
+        supervisor: CompetitionSupervisorHandler | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.settings = settings
         self.journal = journal
         self.runner = runner
         self.position_manager = position_manager
+        self.supervisor = supervisor
         self._sleep = sleep
 
     def run(
@@ -129,7 +154,9 @@ class ContinuousDecisionLoop:
             raise ValueError("max_cycles must be positive when supplied")
 
         self.journal.initialize()
-        evaluated_epochs: set[str] = set()
+        evaluated_epochs = (
+            set() if self.supervisor is None else self.supervisor.evaluated_epochs()
+        )
         cycles = 0
         canonical_decisions = 0
         cached_decisions = 0
@@ -146,6 +173,7 @@ class ContinuousDecisionLoop:
                 last_epoch = epoch
                 state = "MONITORING"
                 decision_published = False
+                outcome: LiveDecisionOutcome | None = None
                 management_state = (
                     None
                     if self.position_manager is None
@@ -266,6 +294,15 @@ class ContinuousDecisionLoop:
                         else "Keep new entries blocked and preserve broker state."
                     ),
                 )
+                if self.supervisor is not None:
+                    self.supervisor.observe_cycle(
+                        collection,
+                        decision_epoch=epoch,
+                        loop_state=state,
+                        outcome=outcome,
+                        dashboard_path=dashboard_path,
+                        position_manager_attached=self.position_manager is not None,
+                    )
 
                 if terminal_state == "OPERATOR_REVIEW_PENDING":
                     break
@@ -296,6 +333,12 @@ class ContinuousDecisionLoop:
                         "the next scheduled cycle."
                     ),
                 )
+                if self.supervisor is not None:
+                    self.supervisor.observe_failure(
+                        exc,
+                        cycle=cycles,
+                        dashboard_path=dashboard_path,
+                    )
 
             if max_cycles is not None and cycles >= max_cycles:
                 if terminal_state == "MONITORING":

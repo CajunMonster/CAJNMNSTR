@@ -120,6 +120,22 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (exit_client_order_id) REFERENCES broker_orders(client_order_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS competition_checkpoints (
+        checkpoint_id TEXT PRIMARY KEY,
+        checkpoint_type TEXT NOT NULL,
+        session_date TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS supervisor_state (
+        state_key TEXT PRIMARY KEY,
+        updated_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+    )
+    """,
     """CREATE INDEX IF NOT EXISTS idx_journal_events_occurred_at
     ON journal_events(occurred_at)""",
     """CREATE INDEX IF NOT EXISTS idx_journal_events_passport
@@ -129,6 +145,8 @@ SCHEMA_STATEMENTS = (
     """CREATE UNIQUE INDEX IF NOT EXISTS idx_position_lifecycles_active_symbol
     ON position_lifecycles(symbol)
     WHERE state != 'CLOSED_BROKER_FLAT'""",
+    """CREATE INDEX IF NOT EXISTS idx_competition_checkpoints_created_at
+    ON competition_checkpoints(created_at)""",
 )
 
 
@@ -520,6 +538,88 @@ class Journal:
                 **dict(row),
                 "payload": json.loads(str(row["payload_json"])),
             }
+            for row in rows
+        ]
+
+    def incident_records(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT * FROM health_incidents
+                ORDER BY opened_at, incident_id"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def referee_result_records(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT result_id, passport_id, verdict, max_quantity,
+                max_limit_price, reason_code, created_at, payload_json
+                FROM referee_results ORDER BY created_at, result_id"""
+            ).fetchall()
+        return [
+            {**dict(row), "payload": json.loads(str(row["payload_json"]))}
+            for row in rows
+        ]
+
+    def all_position_lifecycles(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT * FROM position_lifecycles
+                ORDER BY created_at, plan_id"""
+            ).fetchall()
+        return [self._position_lifecycle_row(row) for row in rows]
+
+    def save_supervisor_state(self, payload: dict[str, Any]) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO supervisor_state (state_key, updated_at, payload_json)
+                VALUES ('competition', ?, ?)
+                ON CONFLICT(state_key) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json""",
+                (_iso(), json.dumps(payload, sort_keys=True, default=str)),
+            )
+
+    def load_supervisor_state(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT payload_json FROM supervisor_state
+                WHERE state_key = 'competition'"""
+            ).fetchone()
+        return None if row is None else json.loads(str(row["payload_json"]))
+
+    def record_checkpoint(
+        self,
+        *,
+        checkpoint_id: str,
+        checkpoint_type: str,
+        session_date: str,
+        created_at: datetime,
+        payload: dict[str, Any],
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO competition_checkpoints
+                (checkpoint_id, checkpoint_type, session_date, created_at, payload_json)
+                VALUES (?, ?, ?, ?, ?)""",
+                (
+                    checkpoint_id,
+                    checkpoint_type,
+                    session_date,
+                    _iso(created_at),
+                    json.dumps(payload, sort_keys=True, default=str),
+                ),
+            )
+
+    def checkpoint_records(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT checkpoint_id, checkpoint_type, session_date, created_at,
+                payload_json FROM competition_checkpoints
+                ORDER BY created_at, checkpoint_id"""
+            ).fetchall()
+        return [
+            {**dict(row), "payload": json.loads(str(row["payload_json"]))}
             for row in rows
         ]
 

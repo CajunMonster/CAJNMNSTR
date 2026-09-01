@@ -113,6 +113,22 @@ class FakePositionManager:
         return self.states[len(self.calls) - 1]
 
 
+class FakeSupervisor:
+    def __init__(self, evaluated=()):
+        self.evaluated = set(evaluated)
+        self.observations = []
+
+    def evaluated_epochs(self):
+        return set(self.evaluated)
+
+    def observe_cycle(self, item, **kwargs):
+        self.observations.append((item, kwargs))
+        return {}
+
+    def observe_failure(self, error, **kwargs):
+        raise AssertionError((error, kwargs))
+
+
 def test_loop_continues_after_non_actionable_decision_on_new_epoch(tmp_path) -> None:
     app = settings(tmp_path)
     runner = FakeRunner(
@@ -155,6 +171,32 @@ def test_loop_does_not_repeat_terra_for_unchanged_bar_epoch(tmp_path) -> None:
     assert result.canonical_decisions == 1
     assert len(runner.calls) == 1
     assert len(runner.monitor_calls) == 1
+
+
+def test_restart_uses_durable_supervisor_epoch_to_prevent_duplicate_decision(
+    tmp_path,
+) -> None:
+    app = settings(tmp_path)
+    same = collection(DECISION_AT)
+    epoch = (same.completed_bars[-1].timestamp + timedelta(minutes=5)).isoformat()
+    runner = FakeRunner([same], ["NOT_ELIGIBLE"])
+    supervisor = FakeSupervisor({epoch})
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        supervisor=supervisor,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=READ_ONLY_LOOP_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=1,
+    )
+
+    assert result.canonical_decisions == 0
+    assert runner.calls == []
+    assert len(runner.monitor_calls) == 1
+    assert supervisor.observations[0][1]["loop_state"] == "UNCHANGED_EVIDENCE_EPOCH"
 
 
 def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> None:

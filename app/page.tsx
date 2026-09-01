@@ -102,6 +102,35 @@ type DashboardState = {
   execution: Array<{ stage: string; status: string; detail: string }>;
   activity: Array<{ time: string; kind: string; text: string; mode: string }>;
   systems: Array<{ id: string; label: string; state: string; detail: string }>;
+  supervisor?: {
+    updated_at: string;
+    system_state: string;
+    loop_advancing: boolean;
+    latest_completed_epoch: string | null;
+    broker_reconciled: boolean;
+    sip: string;
+    opra: string;
+    alerts: Array<{ code: string; severity: string; detail: string }>;
+    recoveries: string[];
+    behavioral_warnings: Array<{ code: string; detail: string }>;
+    next_expected_action: string;
+    metrics: {
+      decision_epochs: number;
+      referee_approve: number;
+      referee_reduce: number;
+      referee_abstain: number;
+      referee_block: number;
+      trades_submitted: number;
+      wins: number;
+      losses: number;
+      realized_pnl: number | null;
+      unrealized_pnl: number | null;
+      current_equity: number | null;
+      max_drawdown_fraction: number | null;
+      capital_deployed: number | null;
+      top_refusal_reasons: Array<{ reason: string; count: number }>;
+    };
+  };
 };
 
 const navItems: Array<[ViewName, string, string]> = [
@@ -462,12 +491,35 @@ function EvidenceView({ state }: { state: DashboardState }) {
   );
 }
 
+function SupervisorPanel({ state }: { state: DashboardState }) {
+  const supervisor = state.supervisor;
+  if (!supervisor) {
+    return <MetalPanel kicker="COMPETITION SUPERVISOR" title="AWAITING RUNTIME CHECKPOINT" status="NO CHECKPOINT"><p>The next supervised loop cycle will publish deterministic operations and performance telemetry.</p></MetalPanel>;
+  }
+  const metrics = supervisor.metrics;
+  const topReason = metrics.top_refusal_reasons[0];
+  return (
+    <MetalPanel kicker="COMPETITION SUPERVISOR" title={supervisor.system_state} status={supervisor.loop_advancing ? "LOOP ADVANCING" : "LOOP STALLED"}>
+      <div className="passport-facts supervisor-facts">
+        <div><span>BROKER / DATA</span><strong>{supervisor.broker_reconciled ? "RECONCILED" : "MISMATCH"} · SIP {supervisor.sip} · OPRA {supervisor.opra}</strong></div>
+        <div><span>DECISION EPOCHS</span><strong>{metrics.decision_epochs}</strong></div>
+        <div><span>REFEREE</span><strong>{metrics.referee_approve} A · {metrics.referee_reduce} R · {metrics.referee_abstain} ABS · {metrics.referee_block} B</strong></div>
+        <div><span>TRADES / W-L</span><strong>{metrics.trades_submitted} · {metrics.wins}-{metrics.losses}</strong></div>
+        <div><span>P&amp;L / CAPITAL</span><strong>{money(metrics.realized_pnl)} realized · {money(metrics.unrealized_pnl)} open · {money(metrics.capital_deployed)} deployed</strong></div>
+        <div><span>TOP REFUSAL</span><strong>{topReason ? `${topReason.reason} (${topReason.count})` : "NONE RECORDED"}</strong></div>
+        <div><span>ALERTS / WARNINGS</span><strong>{supervisor.alerts.length} / {supervisor.behavioral_warnings.length}</strong></div>
+        <div><span>NEXT EXPECTED ACTION</span><strong>{supervisor.next_expected_action}</strong><small>{timestamp(supervisor.updated_at)}</small></div>
+      </div>
+    </MetalPanel>
+  );
+}
+
 function JournalView({ state }: { state: DashboardState }) {
-  return <section className="detail-view journal-view"><ExecutionPanel state={state} /><ActivityPanel state={state} /></section>;
+  return <section className="detail-view journal-view"><SupervisorPanel state={state} /><ExecutionPanel state={state} /><ActivityPanel state={state} /></section>;
 }
 
 function SystemView({ state }: { state: DashboardState }) {
-  return <section className="detail-view"><HealthPanel state={state} showAuthority showConnections /></section>;
+  return <section className="detail-view"><SupervisorPanel state={state} /><HealthPanel state={state} showAuthority showConnections /></section>;
 }
 
 export default function Home() {

@@ -85,6 +85,14 @@ separate PAPER confirmation and armed position authority. New-entry analysis sto
 position exists, but management continues independently of Terra. The manager can submit only
 `sell_to_close`; it never improvises an exit or treats missing position management as safe.
 
+The Competition Supervisor is an observational wrapper, not another decision agent. It consumes
+the loop's existing health, reconciliation, journal, lifecycle, and dashboard telemetry; persists
+hourly/event checkpoints and rolling descriptive performance; and raises explainable operational
+or behavioral flags. Safe recovery is bounded to recollection/reconciliation, dashboard restart,
+durable epoch recovery, and a maximum of three watchdog loop restarts. It cannot call Terra,
+change thresholds, grant authority, or submit an order. Closed-session stale data is an expected
+`PAUSED` state; the same stale data during the regular session is a critical entry block.
+
 Before any entry, a durable position plan must be linked to its sealed `APPROVE`/`REDUCE`
 Passport and its deterministic selected contract. The initial owner-approved PAPER policy fixes a
 25% executable-bid premium stop, a 35% executable-bid target, a 75-minute fill-anchored time stop,

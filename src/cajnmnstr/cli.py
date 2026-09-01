@@ -37,6 +37,7 @@ from .position_management import (
 )
 from .position_policy import INITIAL_POLICY_VERSION, build_initial_position_plan
 from .services import OperatorAuthorityPath, PaperExecutionCoordinator
+from .supervisor import CompetitionSupervisor, LocalDashboardRecoveryActions
 
 
 def _json(value: Any) -> str:
@@ -256,6 +257,12 @@ def _live_loop(
         journal,
         runner,
         position_manager=position_manager,
+        supervisor=CompetitionSupervisor(
+            settings,
+            journal,
+            cadence_seconds=cadence_seconds,
+            recovery=LocalDashboardRecoveryActions(Path.cwd()),
+        ),
     ).run(
         confirmation=confirmation,
         cadence_seconds=cadence_seconds,

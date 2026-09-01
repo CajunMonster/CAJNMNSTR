@@ -158,6 +158,27 @@ migration alias. New local configuration must use `CAJNMNSTR_ENTRY_ENABLED`,
 `CAJNMNSTR_POSITION_MANAGEMENT_ENABLED`, and `CAJNMNSTR_BROKER_LOCK`; conflicting legacy and
 explicit entry values fail closed.
 
+### Competition Supervisor
+
+The deterministic Competition Supervisor observes the existing loop, broker reconciliation,
+SIP/OPRA freshness, Terra availability, durable order/exit uncertainty, journal progress, and
+dashboard freshness. It persists startup, hourly, candidate, entry, exit, incident, recovery, and
+end-of-session checkpoints plus descriptive capital/P&L telemetry. Its warnings never change a
+strategy or risk parameter and it has no AI or broker-mutation interface.
+
+For the next regular session, start the bounded Windows watchdog from the project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launcher\Start-Competition-Supervisor.ps1
+```
+
+It refuses enabled/armed entry authority, chooses read-only or already-armed deterministic
+position-management mode from the redacted local configuration, starts/restarts the dashboard
+independently, and restarts a crashed or three-cadence-stalled loop at most three times. Every loop
+restart recovers durable decision epochs and reconciles before analysis, so it cannot fish for a
+new Terra answer or blindly retry an uncertain broker write. A clean stop at operator review or
+end of session is not restarted.
+
 ## Demo and submission material
 
 The judge-facing descriptions, technology list, architecture summary, limitations, demo narrative,

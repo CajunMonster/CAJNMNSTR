@@ -26,6 +26,8 @@ class EventType(StrEnum):
     BROKER_LIFECYCLE = "broker_lifecycle"
     RECONCILIATION = "reconciliation"
     INCIDENT = "incident"
+    SUPERVISOR_CHECKPOINT = "supervisor_checkpoint"
+    SUPERVISOR_RECOVERY = "supervisor_recovery"
 
 
 class RefereeVerdict(StrEnum):

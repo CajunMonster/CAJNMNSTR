@@ -40,7 +40,9 @@ test("detail views expose provenance, lifecycle, health, and truthful empty stat
   ]) {
     assert.match(page, new RegExp(label.replaceAll("/", "\\/")));
   }
-  assert.match(page, /journal-view"><ExecutionPanel state=\{state\} \/><ActivityPanel/);
+  assert.match(page, /journal-view"><SupervisorPanel state=\{state\} \/><ExecutionPanel/);
+  assert.match(page, /COMPETITION SUPERVISOR/);
+  assert.match(page, /NEXT EXPECTED ACTION/);
   assert.match(page, /showAuthority showConnections/);
   assert.match(page, /\{item\.time\} ET/);
 });
