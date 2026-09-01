@@ -210,6 +210,16 @@ class CompetitionSupervisor:
             self.journal.resolve_incidents("competition_supervisor:runtime_cycle")
 
         equity = _as_decimal(collection.account.equity)
+        metrics_session_date = now.astimezone(NEW_YORK).date().isoformat()
+        if state.get("metrics_session_date") != metrics_session_date:
+            state["metrics_session_date"] = metrics_session_date
+            state["session_start_equity"] = None if equity is None else str(equity)
+            state["session_peak_equity"] = None if equity is None else str(equity)
+            state["session_capital_observation_total"] = "0"
+            state["session_equity_observation_count"] = 0
+            state["last_equity_reconciliation_residual"] = None
+        session_peak = _as_decimal(state.get("session_peak_equity"))
+        session_peak = equity if session_peak is None else max(session_peak, equity or session_peak)
         peak = _as_decimal(state.get("peak_equity"))
         peak = equity if peak is None else max(peak, equity or peak)
         deployed = sum(
@@ -220,7 +230,15 @@ class CompetitionSupervisor:
         state["capital_observation_total"] = str(
             (_as_decimal(state.get("capital_observation_total")) or Decimal("0")) + deployed
         )
+        state["session_equity_observation_count"] = int(
+            state.get("session_equity_observation_count", 0)
+        ) + 1
+        state["session_capital_observation_total"] = str(
+            (_as_decimal(state.get("session_capital_observation_total")) or Decimal("0"))
+            + deployed
+        )
         state["peak_equity"] = None if peak is None else str(peak)
+        state["session_peak_equity"] = None if session_peak is None else str(session_peak)
         state["last_cycle_at"] = now.isoformat()
         state["active_alerts"] = sorted(active_alerts)
         state["recovery_count"] = int(state.get("recovery_count", 0)) + len(recovered)
@@ -237,7 +255,25 @@ class CompetitionSupervisor:
             state["last_epoch_advanced_at"] = now.isoformat()
 
         session_risk = self.session_risk.evaluate(collection.clock)
-        metrics = self._metrics(collection, state, now, session_risk)
+        cumulative_metrics = self._metrics(collection, state, now, session_risk)
+        session_started = now.astimezone(NEW_YORK).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).astimezone(UTC)
+        metrics = self._metrics(
+            collection,
+            state,
+            now,
+            session_risk,
+            started_at=session_started,
+            peak_state_key="session_peak_equity",
+            capital_total_state_key="session_capital_observation_total",
+            observation_count_state_key="session_equity_observation_count",
+            opening_equity_state_key="session_start_equity",
+        )
+        metrics["scope"] = "CURRENT_SESSION"
+        metrics["session_date"] = metrics_session_date
+        cumulative_metrics["scope"] = "COMPETITION_TO_DATE"
+        self._record_equity_residual(metrics, state, now)
         warnings = self._warnings(metrics)
         checkpoint_types = self._checkpoint_types(
             collection,
@@ -256,6 +292,7 @@ class CompetitionSupervisor:
             recovered=recovered,
             warnings=warnings,
             metrics=metrics,
+            cumulative_metrics=cumulative_metrics,
             session_risk=session_risk,
         )
         for checkpoint_type in checkpoint_types:
@@ -600,8 +637,14 @@ class CompetitionSupervisor:
         state: dict[str, Any],
         now: datetime,
         session_risk: SessionRiskSnapshot,
+        *,
+        started_at: datetime | None = None,
+        peak_state_key: str = "peak_equity",
+        capital_total_state_key: str = "capital_observation_total",
+        observation_count_state_key: str = "equity_observation_count",
+        opening_equity_state_key: str | None = None,
     ) -> dict[str, Any]:
-        started = _as_datetime(state.get("competition_started_at")) or now
+        started = started_at or _as_datetime(state.get("competition_started_at")) or now
         events = [
             item
             for item in self.journal.list_events()
@@ -663,7 +706,16 @@ class CompetitionSupervisor:
             or (_as_decimal(item["payload"].get("filled_quantity")) or Decimal("0")) > 0
         ]
         lifecycles = self.journal.all_position_lifecycles()
-        completed = [item for item in lifecycles if item["state"] == "CLOSED_BROKER_FLAT"]
+        completed = [
+            item
+            for item in lifecycles
+            if item["state"] == "CLOSED_BROKER_FLAT"
+            and (
+                _as_datetime(item["lifecycle"].get("closed_at") or item.get("updated_at"))
+                or started
+            )
+            >= started
+        ]
         risk_stop_exits = sum(
             1 for item in completed if item["lifecycle"].get("exit_reason") == "RISK_STOP"
         )
@@ -699,7 +751,7 @@ class CompetitionSupervisor:
             if (value := _as_decimal(item.get("fill_vs_midpoint"))) is not None
         ]
         equity = _as_decimal(collection.account.equity)
-        peak = _as_decimal(state.get("peak_equity"))
+        peak = _as_decimal(state.get(peak_state_key))
         drawdown = None
         if equity is not None and peak is not None and peak > 0:
             drawdown = (peak - equity) / peak
@@ -707,11 +759,11 @@ class CompetitionSupervisor:
             (abs(_as_decimal(item.market_value) or Decimal("0")) for item in collection.positions),
             Decimal("0"),
         )
-        observation_count = int(state.get("equity_observation_count", 0))
+        observation_count = int(state.get(observation_count_state_key, 0))
         average_deployed = None
         if observation_count:
             average_deployed = (
-                _as_decimal(state.get("capital_observation_total")) or Decimal("0")
+                _as_decimal(state.get(capital_total_state_key)) or Decimal("0")
             ) / Decimal(observation_count)
         profit_factor = None
         gross_loss = abs(sum(losers, Decimal("0")))
@@ -725,9 +777,36 @@ class CompetitionSupervisor:
         entry_identity_violation = any(
             count > 1 for count in Counter(entry_passports).values()
         )
+        incident_records = [
+            item
+            for item in self.journal.incident_records()
+            if (_as_datetime(item.get("opened_at")) or started) >= started
+        ]
         incident_text = " ".join(
-            f"{item['component']} {item['message']}" for item in self.journal.incident_records()
+            f"{item['component']} {item['message']}" for item in incident_records
         ).upper()
+        opening_equity = (
+            None
+            if opening_equity_state_key is None
+            else _as_decimal(state.get(opening_equity_state_key))
+        )
+        lifecycle_derived_equity = None
+        equity_residual = None
+        equity_reconciliation_status = "UNAVAILABLE"
+        if (
+            opening_equity is not None
+            and equity is not None
+            and not collection.positions
+            and not collection.open_orders
+            and session_risk.realized_pnl is not None
+        ):
+            lifecycle_derived_equity = opening_equity + session_risk.realized_pnl
+            equity_residual = equity - lifecycle_derived_equity
+            equity_reconciliation_status = (
+                "MATCHED"
+                if abs(equity_residual) < Decimal("0.005")
+                else "UNATTRIBUTED_RESIDUAL"
+            )
         return {
             "decision_epochs": len(terra_events),
             "eligible_epochs": len(terra_events),
@@ -759,6 +838,10 @@ class CompetitionSupervisor:
                 )
             ),
             "current_equity": _safe_number(equity),
+            "session_start_equity": _safe_number(opening_equity),
+            "lifecycle_derived_equity": _safe_number(lifecycle_derived_equity),
+            "equity_reconciliation_residual": _safe_number(equity_residual),
+            "equity_reconciliation_status": equity_reconciliation_status,
             "peak_equity": _safe_number(peak),
             "max_drawdown_fraction": _safe_number(drawdown),
             "capital_deployed": _safe_number(deployed),
@@ -780,12 +863,44 @@ class CompetitionSupervisor:
             "top_refusal_reasons": [
                 {"reason": reason, "count": count} for reason, count in reasons.most_common(5)
             ],
-            "incident_count": len(self.journal.incident_records()),
+            "incident_count": len(incident_records),
             "sample_size_note": (
                 "Descriptive competition telemetry only; sample size is too small for "
                 "statistical significance."
             ),
         }
+
+    def _record_equity_residual(
+        self,
+        metrics: dict[str, Any],
+        state: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        residual = metrics.get("equity_reconciliation_residual")
+        if residual is None or abs(float(residual)) < 0.005:
+            return
+        residual_text = str(residual)
+        if state.get("last_equity_reconciliation_residual") == residual_text:
+            return
+        self.journal.append_event(
+            EventType.RECONCILIATION,
+            source="competition_supervisor",
+            severity="WARNING",
+            payload={
+                "reason_code": "EQUITY_RECONCILIATION_RESIDUAL",
+                "session_date": now.astimezone(NEW_YORK).date().isoformat(),
+                "broker_equity": metrics.get("current_equity"),
+                "lifecycle_derived_equity": metrics.get("lifecycle_derived_equity"),
+                "residual": residual,
+                "attribution": "UNATTRIBUTED",
+                "forced_equality": False,
+            },
+            protective_action=(
+                "Preserve broker truth and lifecycle P&L separately until the residual is "
+                "attributed."
+            ),
+        )
+        state["last_equity_reconciliation_residual"] = residual_text
 
     def _realized_pnl(self, lifecycle: dict[str, Any]) -> Decimal | None:
         return reconciled_realized_pnl(self.journal, lifecycle)
@@ -926,6 +1041,7 @@ class CompetitionSupervisor:
         recovered: list[str],
         warnings: list[dict[str, str]],
         metrics: dict[str, Any],
+        cumulative_metrics: dict[str, Any],
         session_risk: SessionRiskSnapshot,
     ) -> dict[str, Any]:
         stale_labels = {str(item).upper() for item in collection.snapshot.stale_sources}
@@ -972,6 +1088,7 @@ class CompetitionSupervisor:
             "recoveries": recovered,
             "behavioral_warnings": warnings,
             "metrics": metrics,
+            "cumulative_metrics": cumulative_metrics,
             "session_risk": session_risk.to_dict(),
             "next_expected_action": self._next_action(collection, alerts, loop_state),
             "broker_submission_allowed": False,

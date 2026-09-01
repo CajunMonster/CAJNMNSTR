@@ -987,6 +987,27 @@ class BrokerReconciler:
             missing_broker_client_ids=tuple(sorted(local_ids - broker_ids)),
             unverified_flat_client_ids=tuple(sorted(unverified_flat)),
         )
+        normalized_plan_ids = self.journal.normalize_closed_position_lifecycles()
+        for plan_id in normalized_plan_ids:
+            self.journal.append_event(
+                EventType.RECONCILIATION,
+                source="broker_reconciler",
+                correlation_id=plan_id,
+                payload={
+                    "reason_code": "CLOSED_LIFECYCLE_NORMALIZED",
+                    "plan_id": plan_id,
+                    "lifecycle_state": "CLOSED_BROKER_FLAT",
+                    "reconciliation_required": False,
+                    "historical_events_modified": False,
+                },
+            )
+        if (
+            report.matched
+            and not positions
+            and not self.journal.active_position_lifecycles()
+            and not self.journal.has_broker_uncertainty()
+        ):
+            self.journal.resolve_incidents("autonomous_entry")
         self.journal.append_event(
             EventType.RECONCILIATION,
             source="broker_reconciler",

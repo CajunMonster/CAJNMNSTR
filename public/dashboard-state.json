@@ -3,7 +3,7 @@
   "mode": "PAPER",
   "operational_state": "PAUSED",
   "truth_label": "PAPER · MARKET CLOSED · MONITORING · NO DECISION",
-  "updated_at": "2026-09-01T00:51:24.599236+00:00",
+  "updated_at": "2026-09-01T20:02:39.412052+00:00",
   "controls": {
     "entry_enabled": false,
     "entry_armed": false,
@@ -24,15 +24,15 @@
       "id": "sip",
       "label": "SIP MARKET DATA",
       "value": "STALE",
-      "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 3084.4s)."
+      "state": "verified",
+      "detail": "Data age 7.5s is within policy."
     },
     {
       "id": "opra",
       "label": "OPRA OPTIONS",
       "value": "STALE",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 17484.6s)."
+      "detail": "Data is stale or time-inconsistent (age 159.4s)."
     },
     {
       "id": "terra",
@@ -50,117 +50,117 @@
     }
   ],
   "account": {
-    "equity": 100000.0,
-    "buying_power": 400000.0,
-    "options_buying_power": 100000.0,
+    "equity": 99907.79,
+    "buying_power": 399631.16,
+    "options_buying_power": 99907.79,
     "day_pl": null,
     "open_pl": 0.0,
     "position_count": 0,
     "open_order_count": 0,
-    "as_of": "2026-09-01T00:51:24.599236+00:00",
+    "as_of": "2026-09-01T20:02:39.412052+00:00",
     "source": "Authenticated Alpaca PAPER read-only"
   },
   "market": {
     "symbol": "SPY",
-    "price": 767.535,
-    "previous_close": 769.35,
-    "change": -1.815,
-    "change_percent": -0.23591343341782023,
-    "last_update": "2026-09-01T00:00:00.220219+00:00",
+    "price": 761.495,
+    "previous_close": 767.05,
+    "change": -5.555,
+    "change_percent": -0.7242031158333877,
+    "last_update": "2026-09-01T20:02:31.945353+00:00",
     "session": "MARKET CLOSED",
     "data_state": "STALE",
     "feed": "ALPACA SIP",
     "candles": [
       {
         "t": "14:55",
-        "o": 765.64,
-        "h": 765.895,
-        "l": 765.55,
-        "c": 765.67
+        "o": 760.22,
+        "h": 760.89,
+        "l": 760.17,
+        "c": 760.7295
       },
       {
         "t": "15:00",
-        "o": 765.67,
-        "h": 766.05,
-        "l": 765.67,
-        "c": 765.81
+        "o": 760.72,
+        "h": 761.2,
+        "l": 760.62,
+        "c": 761.14
       },
       {
         "t": "15:05",
-        "o": 765.79,
-        "h": 766.04,
-        "l": 765.68,
-        "c": 766.015
+        "o": 761.16,
+        "h": 761.17,
+        "l": 760.8405,
+        "c": 761.095
       },
       {
         "t": "15:10",
-        "o": 766.03,
-        "h": 766.2165,
-        "l": 765.941,
-        "c": 766.18
+        "o": 761.08,
+        "h": 761.48,
+        "l": 761.05,
+        "c": 761.46
       },
       {
         "t": "15:15",
-        "o": 766.18,
-        "h": 766.25,
-        "l": 765.98,
-        "c": 766.035
+        "o": 761.46,
+        "h": 761.61,
+        "l": 761.11,
+        "c": 761.4
       },
       {
         "t": "15:20",
-        "o": 766.03,
-        "h": 766.49,
-        "l": 765.99,
-        "c": 766.41
+        "o": 761.38,
+        "h": 761.48,
+        "l": 761.07,
+        "c": 761.28
       },
       {
         "t": "15:25",
-        "o": 766.42,
-        "h": 766.75,
-        "l": 766.27,
-        "c": 766.635
+        "o": 761.29,
+        "h": 761.44,
+        "l": 761.18,
+        "c": 761.36
       },
       {
         "t": "15:30",
-        "o": 766.62,
-        "h": 766.63,
-        "l": 766.18,
-        "c": 766.44
+        "o": 761.3999,
+        "h": 761.3999,
+        "l": 760.76,
+        "c": 761.14
       },
       {
         "t": "15:35",
-        "o": 766.46,
-        "h": 766.7,
-        "l": 766.39,
-        "c": 766.64
+        "o": 761.155,
+        "h": 761.34,
+        "l": 760.83,
+        "c": 760.85
       },
       {
         "t": "15:40",
-        "o": 766.63,
-        "h": 767.205,
-        "l": 766.6,
-        "c": 767.01
+        "o": 760.87,
+        "h": 761.2599,
+        "l": 760.74,
+        "c": 761.05
       },
       {
         "t": "15:45",
-        "o": 767.0,
-        "h": 767.16,
-        "l": 766.6,
-        "c": 766.85
+        "o": 761.06,
+        "h": 761.445,
+        "l": 760.97,
+        "c": 761.26
       },
       {
         "t": "15:50",
-        "o": 766.87,
-        "h": 767.65,
-        "l": 766.87,
-        "c": 767.3825
+        "o": 761.25,
+        "h": 761.29,
+        "l": 760.58,
+        "c": 760.93
       },
       {
         "t": "15:55",
-        "o": 767.36,
-        "h": 767.995,
-        "l": 766.58,
-        "c": 766.95
+        "o": 760.95,
+        "h": 761.76,
+        "l": 760.595,
+        "c": 761.66
       }
     ]
   },
@@ -175,26 +175,26 @@
     "feed": "OPRA",
     "status": "AUTHORIZED · STALE",
     "chain_health": "VALID",
-    "atm_iv": 9.535,
-    "skew": 0.89,
+    "atm_iv": 10.935,
+    "skew": -0.55,
     "skew_reason": "Same-strike skew",
-    "last_update": "2026-08-31T19:59:59.999962+00:00",
+    "last_update": "2026-09-01T19:59:59.999985+00:00",
     "surface": [
       {
-        "label": "C00768000",
-        "value": 10.46
+        "label": "C00763000",
+        "value": 12.51
       },
       {
-        "label": "P00768000",
-        "value": 10.86
+        "label": "P00763000",
+        "value": 13.7
       },
       {
-        "label": "P00768000",
-        "value": 10.37
+        "label": "P00762000",
+        "value": 10.66
       },
       {
-        "label": "C00768000",
-        "value": 9.67
+        "label": "C00762000",
+        "value": 11.21
       }
     ]
   },
@@ -222,14 +222,13 @@
     "uncertainty": "NOT_EVALUATED",
     "reasons": [
       "market_session",
-      "spy_quote",
       "option_quote",
       "evidence_snapshot"
     ]
   },
   "passport": {
     "id": null,
-    "fixture_id": "alpaca-paper-20260901T005124Z",
+    "fixture_id": "alpaca-paper-20260901T200239Z",
     "sealed": false,
     "source": "No Passport created for this monitoring-only cycle"
   },
@@ -262,7 +261,7 @@
   ],
   "activity": [
     {
-      "time": "20:51:24",
+      "time": "16:02:39",
       "kind": "MONITOR",
       "text": "MARKET CLOSED · broker reconciled · no decision",
       "mode": "PAPER"
@@ -290,89 +289,162 @@
     {
       "id": "spy_quote",
       "label": "SPY QUOTE",
-      "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 3084.4s)."
+      "state": "HEALTHY",
+      "detail": "Data age 7.5s is within policy."
     },
     {
       "id": "option_quote",
       "label": "OPTION QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 17484.6s)."
+      "detail": "Data is stale or time-inconsistent (age 159.4s)."
     },
     {
       "id": "ai_provider",
       "label": "AI PROVIDER",
       "state": "HEALTHY",
       "detail": "Terra is configured and was intentionally not invoked for this cycle."
+    },
+    {
+      "id": "event_calendar",
+      "label": "EVENT CALENDAR",
+      "state": "HEALTHY",
+      "detail": "The session's verified Tier-1 event blackout has expired."
     }
   ],
+  "session_risk": {
+    "session_date": "2026-09-01",
+    "status": "READY",
+    "realized_pnl": "-92.00",
+    "loss_limit": "2000",
+    "loss_remaining": "1908.00",
+    "completed_lifecycles": 2,
+    "lifecycle_ids": [
+      "cajnmnstr-plan-cde5b59ef1617a4bf11076e1",
+      "cajnmnstr-plan-de257f2a7c8af1cb587aa932"
+    ],
+    "entry_allowed": true,
+    "reason_code": "SESSION_RISK_READY",
+    "detail": "Reconciled realized session P&L remains within owner authority.",
+    "evaluated_at": "2026-09-01T20:02:39.380567+00:00"
+  },
   "supervisor": {
     "version": 2,
-    "updated_at": "2026-09-01T00:51:24.723852+00:00",
+    "updated_at": "2026-09-01T20:02:39.799348+00:00",
     "system_state": "PAUSED",
     "loop_advancing": false,
-    "latest_completed_epoch": "2026-08-31T20:00:00+00:00",
+    "latest_completed_epoch": "2026-09-01T20:00:00+00:00",
     "loop_state": "REGULAR_SESSION_COMPLETE",
     "broker_reconciled": true,
-    "sip": "STALE",
+    "sip": "AVAILABLE",
     "opra": "STALE",
-    "entry_authority": "DISABLED",
-    "position_management": "DISABLED_OR_UNARMED",
+    "entry_authority": "ENABLED",
+    "position_management": "ARMED",
     "broker_lock": "CLEAR",
     "position_count": 0,
     "open_order_count": 0,
     "alerts": [],
     "recoveries": [],
-    "behavioral_warnings": [],
+    "behavioral_warnings": [
+      {
+        "code": "EXCESSIVE_ABSTENTION",
+        "detail": "At least 80% of observed epochs are NO_TRADE/ABSTAIN."
+      }
+    ],
     "metrics": {
-      "decision_epochs": 5,
+      "decision_epochs": 45,
+      "eligible_epochs": 45,
       "terra_long_call": 0,
-      "terra_long_put": 0,
-      "terra_no_trade": 5,
-      "referee_approve": 0,
-      "referee_reduce": 0,
-      "referee_abstain": 1,
-      "referee_block": 4,
-      "actionable_candidates": 0,
-      "trades_submitted": 0,
-      "fills": 0,
-      "completed_positions": 0,
+      "terra_long_put": 3,
+      "terra_no_trade": 42,
+      "referee_approve": 2,
+      "referee_reduce": 1,
+      "referee_abstain": 42,
+      "referee_block": 0,
+      "actionable_candidates": 3,
+      "trades_submitted": 4,
+      "fills": 4,
+      "completed_positions": 2,
       "wins": 0,
-      "losses": 0,
-      "realized_pnl": 0.0,
+      "losses": 2,
+      "realized_pnl": -92.0,
+      "realized_session_pnl": -92.0,
+      "session_loss_limit": 2000.0,
+      "session_loss_remaining": 1908.0,
+      "session_risk_status": "READY",
       "unrealized_pnl": 0.0,
-      "current_equity": 100000.0,
-      "peak_equity": 100000.0,
-      "max_drawdown_fraction": 0.0,
+      "current_equity": 99907.79,
+      "session_start_equity": 100000.0,
+      "lifecycle_derived_equity": 99908.0,
+      "equity_reconciliation_residual": -0.21,
+      "equity_reconciliation_status": "UNATTRIBUTED_RESIDUAL",
+      "peak_equity": 100131.84,
+      "max_drawdown_fraction": 0.0022375500140614612,
       "capital_deployed": 0.0,
-      "average_capital_deployed": 0.0,
+      "average_capital_deployed": 237.76381909547737,
       "average_winner": null,
-      "average_loser": null,
+      "average_loser": -46.0,
       "profit_factor": null,
-      "average_holding_minutes": null,
-      "average_quoted_spread_percent": null,
-      "average_fill_vs_midpoint": null,
+      "average_holding_minutes": 59.025537441666664,
+      "average_quoted_spread_percent": 0.6740964348407485,
+      "average_fill_vs_midpoint": 0.00875,
       "risk_stop_exits": 0,
       "entry_identity_violation": false,
       "risk_limit_warning_active": false,
       "top_refusal_reasons": [
         {
-          "reason": "STALE_REPLAY_EVIDENCE",
-          "count": 2
-        },
-        {
-          "reason": "STALE_EVIDENCE",
-          "count": 2
-        },
-        {
           "reason": "AI_NO_TRADE",
+          "count": 42
+        },
+        {
+          "reason": "DIRECTION_STRONGLY_CONFIRMED",
+          "count": 2
+        },
+        {
+          "reason": "DIRECTION_CONFIRMED_WITH_SOFT_CONFLICT",
           "count": 1
         }
       ],
-      "incident_count": 49,
+      "incident_count": 58,
+      "scope": "CURRENT_SESSION",
+      "session_date": "2026-09-01",
       "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance."
     },
-    "next_expected_action": "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED",
+    "cumulative_metrics": {
+      "decision_epochs": 50,
+      "eligible_epochs": 50,
+      "terra_long_call": 0,
+      "terra_long_put": 3,
+      "terra_no_trade": 47,
+      "referee_approve": 2,
+      "referee_reduce": 1,
+      "referee_abstain": 43,
+      "referee_block": 4,
+      "actionable_candidates": 3,
+      "trades_submitted": 4,
+      "fills": 4,
+      "completed_positions": 2,
+      "wins": 0,
+      "losses": 2,
+      "realized_pnl": -92.0,
+      "scope": "COMPETITION_TO_DATE"
+    },
+    "session_risk": {
+      "session_date": "2026-09-01",
+      "status": "READY",
+      "realized_pnl": "-92.00",
+      "loss_limit": "2000",
+      "loss_remaining": "1908.00",
+      "completed_lifecycles": 2,
+      "lifecycle_ids": [
+        "cajnmnstr-plan-cde5b59ef1617a4bf11076e1",
+        "cajnmnstr-plan-de257f2a7c8af1cb587aa932"
+      ],
+      "entry_allowed": true,
+      "reason_code": "SESSION_RISK_READY",
+      "detail": "Reconciled realized session P&L remains within owner authority.",
+      "evaluated_at": "2026-09-01T20:02:39.513997+00:00"
+    },
+    "next_expected_action": "WAIT FOR NEXT REGULAR SESSION; PRESERVE AUTONOMOUS PAPER AUTHORITY",
     "broker_submission_allowed": false
   }
 }

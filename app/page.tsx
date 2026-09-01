@@ -106,6 +106,7 @@ type DashboardState = {
     updated_at: string;
     system_state: string;
     loop_advancing: boolean;
+    loop_state?: string;
     latest_completed_epoch: string | null;
     broker_reconciled: boolean;
     sip: string;
@@ -141,6 +142,17 @@ type DashboardState = {
       max_drawdown_fraction: number | null;
       capital_deployed: number | null;
       top_refusal_reasons: Array<{ reason: string; count: number }>;
+      equity_reconciliation_residual?: number | null;
+      equity_reconciliation_status?: string;
+      scope?: string;
+      session_date?: string;
+    };
+    cumulative_metrics?: {
+      decision_epochs: number;
+      trades_submitted: number;
+      completed_positions: number;
+      realized_pnl: number | null;
+      scope?: string;
     };
   };
 };
@@ -509,16 +521,22 @@ function SupervisorPanel({ state }: { state: DashboardState }) {
     return <MetalPanel kicker="COMPETITION SUPERVISOR" title="AWAITING RUNTIME CHECKPOINT" status="NO CHECKPOINT"><p>The next supervised loop cycle will publish deterministic operations and performance telemetry.</p></MetalPanel>;
   }
   const metrics = supervisor.metrics;
+  const cumulative = supervisor.cumulative_metrics;
   const topReason = metrics.top_refusal_reasons[0];
+  const panelStatus = supervisor.loop_state === "REGULAR_SESSION_COMPLETE"
+    ? "SESSION COMPLETE"
+    : supervisor.loop_advancing ? "LOOP ADVANCING" : "LOOP STALLED";
   return (
-    <MetalPanel kicker="COMPETITION SUPERVISOR" title={supervisor.system_state} status={supervisor.loop_advancing ? "LOOP ADVANCING" : "LOOP STALLED"}>
+    <MetalPanel kicker="COMPETITION SUPERVISOR" title={supervisor.system_state} status={panelStatus}>
       <div className="passport-facts supervisor-facts">
         <div><span>BROKER / DATA</span><strong>{supervisor.broker_reconciled ? "RECONCILED" : "MISMATCH"} · SIP {supervisor.sip} · OPRA {supervisor.opra}</strong></div>
-        <div><span>DECISION EPOCHS</span><strong>{metrics.decision_epochs}</strong></div>
-        <div><span>REFEREE</span><strong>{metrics.referee_approve} A · {metrics.referee_reduce} R · {metrics.referee_abstain} ABS · {metrics.referee_block} B</strong></div>
-        <div><span>TRADES / W-L</span><strong>{metrics.trades_submitted} · {metrics.wins}-{metrics.losses}</strong></div>
+        <div><span>CURRENT SESSION EPOCHS</span><strong>{metrics.decision_epochs}<small>{metrics.session_date || "SESSION DATE UNAVAILABLE"}</small></strong></div>
+        <div><span>CURRENT SESSION REFEREE</span><strong>{metrics.referee_approve} A · {metrics.referee_reduce} R · {metrics.referee_abstain} ABS · {metrics.referee_block} B</strong></div>
+        <div><span>CURRENT SESSION TRADES / W-L</span><strong>{metrics.trades_submitted} · {metrics.wins}-{metrics.losses}</strong></div>
         <div><span>SESSION P&amp;L / LOSS REMAINING</span><strong>{money(metrics.realized_session_pnl ?? metrics.realized_pnl)} session · {metrics.session_loss_remaining == null ? "OWNER THRESHOLD REQUIRED" : money(metrics.session_loss_remaining)} remaining</strong></div>
         <div><span>EQUITY / DRAWDOWN / CAPITAL</span><strong>{money(metrics.current_equity)} equity · {metrics.max_drawdown_fraction == null ? "—" : `${(metrics.max_drawdown_fraction * 100).toFixed(2)}%`} DD · {money(metrics.capital_deployed)} deployed</strong></div>
+        <div><span>EQUITY RECONCILIATION</span><strong>{metrics.equity_reconciliation_status || "UNAVAILABLE"}{metrics.equity_reconciliation_residual == null ? "" : ` · ${money(metrics.equity_reconciliation_residual)} residual`}</strong></div>
+        <div><span>COMPETITION TO DATE</span><strong>{cumulative ? `${cumulative.decision_epochs} epochs · ${cumulative.trades_submitted} orders · ${cumulative.completed_positions} closed · ${money(cumulative.realized_pnl)}` : "AWAITING CUMULATIVE CHECKPOINT"}</strong></div>
         <div><span>TOP REFUSAL</span><strong>{topReason ? `${topReason.reason} (${topReason.count})` : "NONE RECORDED"}</strong></div>
         <div><span>ALERTS / WARNINGS</span><strong>{supervisor.alerts.length} / {supervisor.behavioral_warnings.length}</strong></div>
         <div><span>NEXT EXPECTED ACTION</span><strong>{supervisor.next_expected_action}</strong><small>{timestamp(supervisor.updated_at)}</small></div>

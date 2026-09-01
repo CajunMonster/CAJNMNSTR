@@ -435,6 +435,17 @@ class Journal:
                 (_iso(), component),
             )
 
+    def unresolved_incidents(self, component: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM health_incidents WHERE resolved_at IS NULL"
+        parameters: tuple[str, ...] = ()
+        if component is not None:
+            query += " AND component = ?"
+            parameters = (component,)
+        query += " ORDER BY opened_at, incident_id"
+        with self._connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
     def reserve_order_attempt(
         self,
         *,
@@ -833,6 +844,16 @@ class Journal:
                 **json.loads(str(existing["lifecycle_json"])),
                 **(payload or {}),
             }
+            if state == "CLOSED_BROKER_FLAT":
+                merged.update(
+                    {
+                        "broker_flat_verified": True,
+                        "broker_position_verified": True,
+                        "current_lifecycle_status": "CLOSED_BROKER_FLAT",
+                        "reconciliation_required": False,
+                        "submission_status": "CLOSED_BROKER_FLAT",
+                    }
+                )
             cursor = connection.execute(
                 """UPDATE position_lifecycles
                 SET state = ?, updated_at = ?, broker_quantity = ?,
@@ -850,6 +871,60 @@ class Journal:
             )
             if cursor.rowcount != 1:
                 raise EvidenceStoreError(f"Unknown position plan ID: {plan_id}")
+
+    def normalize_closed_position_lifecycles(self) -> list[str]:
+        """Make current lifecycle fields agree with durable broker-flat state.
+
+        Historical journal and broker-order events remain untouched.  This only repairs the
+        materialized lifecycle snapshot used by startup recovery and the dashboard.
+        """
+
+        normalized_plan_ids: list[str] = []
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT plan_id, broker_quantity, lifecycle_json
+                FROM position_lifecycles WHERE state = 'CLOSED_BROKER_FLAT'
+                ORDER BY created_at, plan_id"""
+            ).fetchall()
+            for row in rows:
+                lifecycle = json.loads(str(row["lifecycle_json"]))
+                normalized = {
+                    **lifecycle,
+                    "broker_flat_verified": True,
+                    "broker_position_verified": True,
+                    "current_lifecycle_status": "CLOSED_BROKER_FLAT",
+                    "reconciliation_required": False,
+                    "submission_status": "CLOSED_BROKER_FLAT",
+                }
+                entry_client_order_id = normalized.get("entry_client_order_id")
+                if entry_client_order_id:
+                    order_row = connection.execute(
+                        "SELECT status, payload_json FROM broker_orders WHERE client_order_id = ?",
+                        (str(entry_client_order_id),),
+                    ).fetchone()
+                    if order_row is not None:
+                        order_payload = json.loads(str(order_row["payload_json"]))
+                        broker_order = order_payload.get("broker_order", {})
+                        broker_status = broker_order.get("status") or order_row["status"]
+                        filled_quantity = broker_order.get("filled_quantity")
+                        if broker_status:
+                            normalized["entry_broker_status"] = str(broker_status).upper()
+                        if filled_quantity is not None:
+                            normalized["entry_filled_quantity"] = str(filled_quantity)
+                if normalized == lifecycle and str(row["broker_quantity"]) == "0":
+                    continue
+                connection.execute(
+                    """UPDATE position_lifecycles
+                    SET updated_at = ?, broker_quantity = '0', lifecycle_json = ?
+                    WHERE plan_id = ?""",
+                    (
+                        _iso(),
+                        json.dumps(normalized, sort_keys=True, default=str),
+                        str(row["plan_id"]),
+                    ),
+                )
+                normalized_plan_ids.append(str(row["plan_id"]))
+        return normalized_plan_ids
 
     def bind_position_fill(
         self,

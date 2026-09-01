@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -457,11 +458,51 @@ def test_submission_is_not_flat_until_reconciliation_proves_zero(tmp_path) -> No
     assert lifecycle["state"] == "EXIT_PENDING_RECONCILIATION"
 
     broker.positions = []
+    journal.open_incident(
+        component="autonomous_entry",
+        severity="CRITICAL",
+        state="PAUSED",
+        message="The entry order is filled but the broker position is not yet reconciled.",
+        protective_action="Reconcile.",
+    )
     BrokerReconciler(journal, broker).reconcile()
     assert manager.run_cycle(collection(broker)) == "FLAT"
     assert journal.position_lifecycle(symbol=SYMBOL) is None
     records = journal.broker_order_records()
     assert records[-1]["status"] == "CLOSED_BROKER_FLAT"
+    closed = journal.all_position_lifecycles()[0]
+    assert closed["lifecycle"]["broker_flat_verified"] is True
+    assert closed["lifecycle"]["reconciliation_required"] is False
+    assert closed["lifecycle"]["submission_status"] == "CLOSED_BROKER_FLAT"
+    assert journal.unresolved_incidents("autonomous_entry") == []
+
+
+def test_legacy_closed_lifecycle_snapshot_is_normalized_without_deleting_history(
+    tmp_path,
+) -> None:
+    _, journal, broker, manager = setup_manager(tmp_path, approved_plan=plan())
+    manager.run_cycle(collection(broker, bid=Decimal("3.00")))
+    broker.positions = []
+    BrokerReconciler(journal, broker).reconcile()
+    assert manager.run_cycle(collection(broker)) == "FLAT"
+    before_events = len(journal.list_events())
+    lifecycle = journal.all_position_lifecycles()[0]
+    with journal._connect() as connection:
+        stale = dict(lifecycle["lifecycle"])
+        stale.update({"reconciliation_required": True, "submission_status": "pending_new"})
+        connection.execute(
+            "UPDATE position_lifecycles SET broker_quantity = '2', lifecycle_json = ?",
+            (json.dumps(stale, sort_keys=True),),
+        )
+
+    normalized = journal.normalize_closed_position_lifecycles()
+
+    assert normalized == [lifecycle["plan_id"]]
+    repaired = journal.all_position_lifecycles()[0]
+    assert repaired["broker_quantity"] == Decimal("0")
+    assert repaired["lifecycle"]["reconciliation_required"] is False
+    assert repaired["lifecycle"]["submission_status"] == "CLOSED_BROKER_FLAT"
+    assert len(journal.list_events()) == before_events
 
 
 def test_broker_mismatch_or_overclose_attempt_fails_without_submission(tmp_path) -> None:

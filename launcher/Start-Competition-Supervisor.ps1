@@ -131,6 +131,48 @@ function Get-HeartbeatAgeSeconds {
     }
 }
 
+function Get-CleanTerminalState {
+    try {
+        $state = Get-Content -LiteralPath $dashboardPath -Raw | ConvertFrom-Json
+        $regularSessionComplete = (
+            $state.supervisor.loop_state -eq 'REGULAR_SESSION_COMPLETE' -and
+            $state.supervisor.loop_advancing -eq $false -and
+            $state.market.session -eq 'MARKET CLOSED' -and
+            $state.supervisor.broker_reconciled -eq $true -and
+            [int]$state.supervisor.position_count -eq 0 -and
+            [int]$state.supervisor.open_order_count -eq 0 -and
+            $state.supervisor.broker_submission_allowed -eq $false
+        )
+        if ($regularSessionComplete) {
+            return 'REGULAR_SESSION_COMPLETE'
+        }
+    }
+    catch {
+        return $null
+    }
+    return $null
+}
+
+function Write-WatchdogState(
+    [System.Diagnostics.Process]$process,
+    [bool]$alive,
+    [int]$restarts,
+    [string]$terminalState
+) {
+    [pscustomobject]@{
+        app = 'CAJNMNSTR'
+        supervisor = 'competition_watchdog'
+        loop_pid = $process.Id
+        loop_alive = $alive
+        restart_count = $restarts
+        checked_at = [DateTimeOffset]::UtcNow.ToString('o')
+        terminal_state = $terminalState
+        entry_enabled = [bool]$configuration.entry_enabled
+        autonomous_entry_mode = $autonomous
+        broker_submission_allowed = $false
+    } | ConvertTo-Json | Set-Content -LiteralPath $watchdogPath -Encoding utf8
+}
+
 New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
 
 $createdNew = $false
@@ -168,20 +210,11 @@ try {
     Start-LocalDashboard
 
     $restartCount = 0
+    $cleanTerminalState = $null
     $loop = Start-CompetitionLoop $managePosition $autonomous
     Write-StartupEvent 'SUPERVISOR_PROCESS_STARTED' 'INFO' 'The supervised PAPER loop process started after redacted safety validation.'
     while ($true) {
-        [pscustomobject]@{
-            app = 'CAJNMNSTR'
-            supervisor = 'competition_watchdog'
-            loop_pid = $loop.Id
-            loop_alive = -not $loop.HasExited
-            restart_count = $restartCount
-            checked_at = [DateTimeOffset]::UtcNow.ToString('o')
-            entry_enabled = [bool]$configuration.entry_enabled
-            autonomous_entry_mode = $autonomous
-            broker_submission_allowed = $false
-        } | ConvertTo-Json | Set-Content -LiteralPath $watchdogPath -Encoding utf8
+        Write-WatchdogState $loop (-not $loop.HasExited) $restartCount $null
 
         Start-Sleep -Seconds $CheckSeconds
         $loop.Refresh()
@@ -189,12 +222,18 @@ try {
 
         $restartReason = $null
         if ($loop.HasExited) {
-            if ($loop.ExitCode -eq 0) {
+            $loop.WaitForExit()
+            $cleanTerminalState = Get-CleanTerminalState
+            if ($TestMode -and $loop.ExitCode -eq 0) {
+                $cleanTerminalState = 'STARTUP_TEST_COMPLETE'
+            }
+            if ($cleanTerminalState -eq 'REGULAR_SESSION_COMPLETE' -or $cleanTerminalState -eq 'STARTUP_TEST_COMPLETE') {
+                Write-WatchdogState $loop $false $restartCount $cleanTerminalState
                 break
             }
             $restartReason = "Loop process exited with code $($loop.ExitCode)."
         }
-        elseif ((Get-HeartbeatAgeSeconds) -gt 180) {
+        elseif (-not $TestMode -and (Get-HeartbeatAgeSeconds) -gt 180) {
             $restartReason = 'Regular-session supervisor heartbeat exceeded three 60-second cadences.'
             Stop-Process -Id $loop.Id -Force
             $loop.WaitForExit()
@@ -225,7 +264,12 @@ try {
             $loop = Start-CompetitionLoop $managePosition $autonomous
         }
     }
-    Write-StartupEvent 'SUPERVISOR_STOPPED' 'INFO' 'The supervised loop reached a clean terminal state.'
+    if ($null -ne $cleanTerminalState) {
+        Write-StartupEvent 'SUPERVISOR_STOPPED' 'INFO' ("The supervised loop reached clean terminal state: " + $cleanTerminalState + '.')
+    }
+    else {
+        Write-StartupEvent 'SUPERVISOR_STOPPED_FAIL_CLOSED' 'CRITICAL' 'The watchdog stopped after bounded recovery without a clean terminal state.'
+    }
 }
 catch {
     Write-StartupEvent 'STARTUP_FAILED' 'CRITICAL' ("Startup failed closed: " + $_.Exception.Message)

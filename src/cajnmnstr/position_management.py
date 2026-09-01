@@ -371,9 +371,13 @@ class DeterministicPositionManager:
                     payload={
                         "broker_flat_verified": True,
                         "closed_at": datetime.now(UTC).isoformat(),
+                        "current_lifecycle_status": "CLOSED_BROKER_FLAT",
+                        "reconciliation_required": False,
+                        "submission_status": "CLOSED_BROKER_FLAT",
                     },
                 )
                 self.journal.resolve_incidents(f"position_lifecycle:{plan.symbol}")
+                self.journal.resolve_incidents("autonomous_entry")
             elif lifecycle["state"] not in {"PLANNED"}:
                 unresolved = True
                 self._critical(

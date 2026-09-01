@@ -330,9 +330,12 @@ def test_hourly_checkpoint_and_metric_distribution(tmp_path: Path) -> None:
     assert metrics["referee_abstain"] == 1
     assert metrics["referee_block"] == 1
     assert metrics["current_equity"] == 100050.0
-    assert metrics["peak_equity"] == 100100.0
+    assert metrics["peak_equity"] == 100050.0
     assert metrics["capital_deployed"] == 425.0
     assert metrics["unrealized_pnl"] == 12.5
+    assert metrics["scope"] == "CURRENT_SESSION"
+    assert summary["cumulative_metrics"]["peak_equity"] == 100100.0
+    assert summary["cumulative_metrics"]["scope"] == "COMPETITION_TO_DATE"
     assert any(
         item["checkpoint_type"] == "HOURLY" for item in journal.checkpoint_records()
     )
@@ -425,6 +428,12 @@ def test_watchdog_is_bounded_and_requires_explicit_autonomous_authority() -> Non
     assert "--max-cycles', '1'" in script
     assert "--no-order-test" in script
     assert "PAPER_NO_ORDER_STARTUP_TEST" in script
+    assert "Get-CleanTerminalState" in script
+    assert "$loop.WaitForExit()" in script
+    assert "$cleanTerminalState -eq 'REGULAR_SESSION_COMPLETE'" in script
+    assert "-not $TestMode -and (Get-HeartbeatAgeSeconds) -gt 180" in script
+    assert "Write-WatchdogState $loop $false" in script
+    assert "SUPERVISOR_STOPPED_FAIL_CLOSED" in script
 
 
 def test_tuesday_task_registration_is_local_idempotent_and_secret_free() -> None:
@@ -530,3 +539,54 @@ def test_clean_terminal_state_never_claims_loop_is_still_advancing(tmp_path: Pat
     assert journal.load_supervisor_state()["runtime_terminal_state"] == (
         "REGULAR_SESSION_COMPLETE"
     )
+
+
+def test_headline_metrics_are_session_scoped_and_history_is_preserved(tmp_path: Path) -> None:
+    app, journal, monitor = supervisor(tmp_path)
+    prior = "live-prior-session"
+    current = "live-current-session"
+    for passport_id, direction, verdict in [
+        (prior, "NO_TRADE", "ABSTAIN"),
+        (current, "LONG_PUT", "APPROVE"),
+    ]:
+        journal.create_passport(passport_id, {"source_mode": "LIVE"})
+        journal.append_event(
+            EventType.PROPOSAL,
+            source="terra_live",
+            passport_id=passport_id,
+            payload={"proposal": {"direction": direction}, "failure_code": None},
+        )
+        journal.append_event(
+            EventType.REFEREE_VERDICT,
+            source="deterministic_referee",
+            passport_id=passport_id,
+            payload={"verdict": verdict, "reason_code": verdict},
+        )
+    with journal._connect() as connection:
+        connection.execute(
+            "UPDATE journal_events SET occurred_at = ? WHERE passport_id = ?",
+            ((NOW - timedelta(days=1)).isoformat(), prior),
+        )
+        connection.execute(
+            "UPDATE journal_events SET occurred_at = ? WHERE passport_id = ?",
+            (NOW.isoformat(), current),
+        )
+    journal.save_supervisor_state(
+        {
+            "version": 2,
+            "competition_started_at": (NOW - timedelta(days=1)).isoformat(),
+            "active_alerts": [],
+            "equity_observation_count": 0,
+            "capital_observation_total": "0",
+        }
+    )
+
+    summary = observe(monitor, collection())
+
+    assert summary["metrics"]["decision_epochs"] == 1
+    assert summary["metrics"]["terra_long_put"] == 1
+    assert summary["metrics"]["referee_approve"] == 1
+    assert summary["cumulative_metrics"]["decision_epochs"] == 2
+    assert summary["cumulative_metrics"]["terra_no_trade"] == 1
+    assert summary["cumulative_metrics"]["referee_abstain"] == 1
+    assert app.entry_enabled is False
