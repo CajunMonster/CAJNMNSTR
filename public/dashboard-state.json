@@ -3,7 +3,7 @@
   "mode": "PAPER",
   "operational_state": "PAUSED",
   "truth_label": "PAPER · MARKET CLOSED · MONITORING · NO DECISION",
-  "updated_at": "2026-09-01T00:44:52.762144+00:00",
+  "updated_at": "2026-09-01T00:51:24.599236+00:00",
   "controls": {
     "entry_enabled": false,
     "entry_armed": false,
@@ -25,14 +25,14 @@
       "label": "SIP MARKET DATA",
       "value": "STALE",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 2692.5s)."
+      "detail": "Data is stale or time-inconsistent (age 3084.4s)."
     },
     {
       "id": "opra",
       "label": "OPRA OPTIONS",
       "value": "STALE",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 17092.8s)."
+      "detail": "Data is stale or time-inconsistent (age 17484.6s)."
     },
     {
       "id": "terra",
@@ -57,7 +57,7 @@
     "open_pl": 0.0,
     "position_count": 0,
     "open_order_count": 0,
-    "as_of": "2026-09-01T00:44:52.762144+00:00",
+    "as_of": "2026-09-01T00:51:24.599236+00:00",
     "source": "Authenticated Alpaca PAPER read-only"
   },
   "market": {
@@ -229,7 +229,7 @@
   },
   "passport": {
     "id": null,
-    "fixture_id": "alpaca-paper-20260901T004452Z",
+    "fixture_id": "alpaca-paper-20260901T005124Z",
     "sealed": false,
     "source": "No Passport created for this monitoring-only cycle"
   },
@@ -262,7 +262,7 @@
   ],
   "activity": [
     {
-      "time": "20:44:52",
+      "time": "20:51:24",
       "kind": "MONITOR",
       "text": "MARKET CLOSED · broker reconciled · no decision",
       "mode": "PAPER"
@@ -291,13 +291,13 @@
       "id": "spy_quote",
       "label": "SPY QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 2692.5s)."
+      "detail": "Data is stale or time-inconsistent (age 3084.4s)."
     },
     {
       "id": "option_quote",
       "label": "OPTION QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 17092.8s)."
+      "detail": "Data is stale or time-inconsistent (age 17484.6s)."
     },
     {
       "id": "ai_provider",
@@ -308,11 +308,11 @@
   ],
   "supervisor": {
     "version": 2,
-    "updated_at": "2026-09-01T00:44:52.826535+00:00",
+    "updated_at": "2026-09-01T00:51:24.723852+00:00",
     "system_state": "PAUSED",
-    "loop_advancing": true,
+    "loop_advancing": false,
     "latest_completed_epoch": "2026-08-31T20:00:00+00:00",
-    "loop_state": "NON_ACTIONABLE_EVIDENCE",
+    "loop_state": "REGULAR_SESSION_COMPLETE",
     "broker_reconciled": true,
     "sip": "STALE",
     "opra": "STALE",
@@ -369,7 +369,7 @@
           "count": 1
         }
       ],
-      "incident_count": 47,
+      "incident_count": 49,
       "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance."
     },
     "next_expected_action": "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED",

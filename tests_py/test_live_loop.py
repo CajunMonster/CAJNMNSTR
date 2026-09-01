@@ -117,6 +117,7 @@ class FakeSupervisor:
     def __init__(self, evaluated=()):
         self.evaluated = set(evaluated)
         self.observations = []
+        self.terminals = []
 
     def evaluated_epochs(self):
         return set(self.evaluated)
@@ -127,6 +128,9 @@ class FakeSupervisor:
 
     def observe_failure(self, error, **kwargs):
         raise AssertionError((error, kwargs))
+
+    def observe_terminal(self, state, **kwargs):
+        self.terminals.append((state, kwargs))
 
 
 def test_loop_continues_after_non_actionable_decision_on_new_epoch(tmp_path) -> None:
@@ -197,6 +201,7 @@ def test_restart_uses_durable_supervisor_epoch_to_prevent_duplicate_decision(
     assert runner.calls == []
     assert len(runner.monitor_calls) == 1
     assert supervisor.observations[0][1]["loop_state"] == "UNCHANGED_EVIDENCE_EPOCH"
+    assert supervisor.terminals[0][0] == "BOUNDED_RUN_COMPLETE"
 
 
 def test_candidate_pauses_for_operator_review_without_submission(tmp_path) -> None:

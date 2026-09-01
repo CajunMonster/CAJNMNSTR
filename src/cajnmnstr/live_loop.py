@@ -70,6 +70,13 @@ class CompetitionSupervisorHandler(Protocol):
         dashboard_path: Path | None,
     ) -> None: ...
 
+    def observe_terminal(
+        self,
+        terminal_state: str,
+        *,
+        dashboard_path: Path | None,
+    ) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ContinuousLoopResult:
@@ -346,6 +353,11 @@ class ContinuousDecisionLoop:
                 break
             self._sleep(cadence_seconds)
 
+        if self.supervisor is not None:
+            self.supervisor.observe_terminal(
+                terminal_state,
+                dashboard_path=dashboard_path,
+            )
         return ContinuousLoopResult(
             cycles=cycles,
             canonical_decisions=canonical_decisions,

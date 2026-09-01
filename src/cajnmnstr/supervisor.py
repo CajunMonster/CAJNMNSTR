@@ -153,6 +153,7 @@ class CompetitionSupervisor:
         self._now = now or (lambda: datetime.now(UTC))
         self.recovery = recovery or NoopRecoveryActions()
         self._state: dict[str, Any] | None = None
+        self._last_summary: dict[str, Any] | None = None
 
     def observe_cycle(
         self,
@@ -268,6 +269,7 @@ class CompetitionSupervisor:
         self._state = state
         if dashboard_path is not None:
             self.publish_dashboard(summary, dashboard_path)
+        self._last_summary = summary
         return summary
 
     def evaluated_epochs(self) -> set[str]:
@@ -275,6 +277,54 @@ class CompetitionSupervisor:
         self.journal.initialize()
         state = self._load_state(now)
         return {str(item) for item in state.get("evaluated_decision_epochs", [])}
+
+    def observe_terminal(
+        self,
+        terminal_state: str,
+        *,
+        dashboard_path: Path | None,
+    ) -> None:
+        now = self._now().astimezone(UTC)
+        self.journal.initialize()
+        state = self._load_state(now)
+        state["runtime_terminal_state"] = terminal_state
+        state["runtime_stopped_at"] = now.isoformat()
+        summary = self._last_summary
+        if summary is None and dashboard_path is not None:
+            try:
+                dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+                candidate = dashboard.get("supervisor")
+                if isinstance(candidate, dict):
+                    summary = candidate
+            except (OSError, json.JSONDecodeError):
+                summary = None
+        if summary is not None:
+            summary = {
+                **summary,
+                "updated_at": now.isoformat(),
+                "system_state": "PAUSED",
+                "loop_advancing": False,
+                "loop_state": terminal_state,
+                "next_expected_action": (
+                    "WAIT FOR NEXT REGULAR SESSION; KEEP ENTRY DISABLED"
+                    if terminal_state == "REGULAR_SESSION_COMPLETE"
+                    else (
+                        "OWNER REVIEW REQUIRED; DO NOT SUBMIT"
+                        if terminal_state == "OPERATOR_REVIEW_PENDING"
+                        else "RUNTIME STOPPED; START THE SUPERVISED LOOP WHEN SCHEDULED"
+                    )
+                ),
+                "broker_submission_allowed": False,
+            }
+            if terminal_state == "REGULAR_SESSION_COMPLETE":
+                session_date = now.astimezone(NEW_YORK).date().isoformat()
+                if state.get("end_of_session_checkpoint_date") != session_date:
+                    self._persist_checkpoint("END_OF_SESSION", summary, now)
+                    state["end_of_session_checkpoint_date"] = session_date
+            if dashboard_path is not None:
+                self.publish_dashboard(summary, dashboard_path)
+            self._last_summary = summary
+        self.journal.save_supervisor_state(state)
 
     def observe_failure(
         self,

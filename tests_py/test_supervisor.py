@@ -436,3 +436,18 @@ def test_restart_recovers_durable_supervisor_state(tmp_path: Path) -> None:
     assert state["last_epoch"] == "2026-09-01T15:05:00+00:00"
     assert restored["loop_advancing"] is True
     assert len([c for c in journal.checkpoint_records() if c["checkpoint_type"] == "STARTUP"]) == 1
+
+
+def test_clean_terminal_state_never_claims_loop_is_still_advancing(tmp_path: Path) -> None:
+    _, journal, monitor = supervisor(tmp_path)
+    summary = observe(monitor, collection(market_open=False))
+    assert summary["loop_advancing"] is True
+    dashboard = tmp_path / "dashboard.json"
+    monitor.publish_dashboard(summary, dashboard)
+    monitor.observe_terminal("REGULAR_SESSION_COMPLETE", dashboard_path=dashboard)
+    published = json.loads(dashboard.read_text(encoding="utf-8"))["supervisor"]
+    assert published["loop_advancing"] is False
+    assert published["loop_state"] == "REGULAR_SESSION_COMPLETE"
+    assert journal.load_supervisor_state()["runtime_terminal_state"] == (
+        "REGULAR_SESSION_COMPLETE"
+    )
