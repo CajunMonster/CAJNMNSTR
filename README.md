@@ -55,6 +55,9 @@ and reviewed before a new deployment.
   distinguishes hard and soft Referee gates, and selects only eligible SPY options.
 - **Live Evidence Snapshot** normalizes authenticated PAPER account, SIP bars/quotes, and OPRA
   option snapshots through that same decision contract, then stops before broker submission.
+- **Verified Tier-1 Calendar** supplies a checked-in, source-stamped September 1–4 competition
+  calendar. The owner-approved 15-minute-before/30-minute-after blackout blocks new entries only;
+  coverage expiration or failed verification also fails new-entry authority closed.
 - **Deterministic Position Manager** requires an immutable owner-approved plan before entry,
   evaluates stop, target, structured thesis invalidation, time stop, and forced-EOD conditions,
   and can produce only a reconciled `sell_to_close` lifecycle.
@@ -67,6 +70,8 @@ entitlement, and [docs/TONIGHT_OWNER_CHECKLIST.md](docs/TONIGHT_OWNER_CHECKLIST.
 credential and first-test sequence. A concise competition narrative is available in
 [docs/SUBMISSION_WRITEUP.md](docs/SUBMISSION_WRITEUP.md). The sanitized MCP runtime proof is in
 [docs/ALPACA_MCP_VERIFICATION.md](docs/ALPACA_MCP_VERIFICATION.md).
+The bounded calendar and source record are documented in
+[docs/EVENT_CALENDAR_2026-09-01_04.md](docs/EVENT_CALENDAR_2026-09-01_04.md).
 
 ## Scope and limitations
 
@@ -133,6 +138,11 @@ health; they cannot submit an order. `live-decision` also reads completed five-m
 normalizes the shared Evidence Snapshot, invokes Terra, runs the Referee and selector, seals the
 Passport, updates the dashboard, and stops at operator review. `verify-terra` and
 `replay-cycle --live-terra` send only checked-in replay evidence to OpenAI.
+
+Live snapshots also carry deterministic Tier-1 event context. A verified session with no event
+uses `VERIFIED_NO_NEARBY_EVENT`; an event session distinguishes `BEFORE_BLACKOUT`,
+`DURING_BLACKOUT`, and `AFTER_BLACKOUT`. `DURING_BLACKOUT`, unverified input, or expired coverage
+blocks new-entry authority without disabling deterministic management of an existing position.
 
 The continuous loop has three explicit modes. Read-only monitoring can be started with:
 

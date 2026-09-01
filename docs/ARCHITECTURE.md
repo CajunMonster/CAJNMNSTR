@@ -67,6 +67,15 @@ SIP quote age over 30 seconds, OPRA quote age over 30 seconds, insufficient comp
 invalid evidence makes the snapshot non-actionable. The command has no execution-coordinator
 dependency and always records `broker_submission_allowed=false`.
 
+For September 1–4, 2026, the live collector also reads a checked-in, verified Tier-1 event
+calendar whose BLS/ISM source URLs, access date, coverage, timezone, importance, and release
+timestamps travel with the Evidence Snapshot. The owner-approved blackout is 15 minutes before
+through 30 minutes after a release. The deterministic states are `BEFORE_BLACKOUT`,
+`DURING_BLACKOUT`, `AFTER_BLACKOUT`, and `VERIFIED_NO_NEARBY_EVENT`. An active blackout,
+unverified calendar, malformed policy, or expired coverage becomes a new-entry hard failure.
+Event-calendar health remains explicitly noncritical for deterministic management and exit of an
+already verified position.
+
 Open-market readiness and the decision snapshot both use the same 30-second SIP/OPRA freshness
 policy. The snapshot timestamp is captured after the authenticated read set completes; the earlier
 market-clock response is retained as provenance but is not used as the post-read freshness clock.

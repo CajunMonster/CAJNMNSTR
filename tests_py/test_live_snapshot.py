@@ -26,7 +26,7 @@ from cajnmnstr.models import (
 )
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "replay" / "spy-decision-cycle.json"
-DECISION_AT = datetime(2026, 8, 31, 14, 35, tzinfo=UTC)
+DECISION_AT = datetime(2026, 9, 1, 16, 35, tzinfo=UTC)
 
 
 def app_settings(tmp_path: Path) -> Settings:
@@ -296,7 +296,11 @@ def test_live_source_normalizes_to_the_replay_snapshot_contract(tmp_path: Path) 
     ):
         assert feature in live.snapshot.features
     assert "relative_volume" not in live.snapshot.features
-    assert live.snapshot.features["event_calendar_state"] == "UNAVAILABLE"
+    assert live.snapshot.features["event_calendar_state"] == "AFTER_BLACKOUT"
+    assert live.event_calendar.verification_state == "VERIFIED"
+    assert live.event_calendar.freshness_state == "CURRENT"
+    assert live.event_calendar.entry_blocked is False
+    assert live.snapshot.source_provenance["event_calendar"]["sources"]
 
 
 def test_live_snapshot_reaches_shared_terra_referee_selector_contract(tmp_path: Path) -> None:

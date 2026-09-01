@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "calendar_id": "cajnmnstr-competition-tier1-2026-09-01_04-v1",
+  "verification_state": "VERIFIED",
+  "verified_at": "2026-09-01T12:00:00-04:00",
+  "timezone": "America/New_York",
+  "coverage_start": "2026-09-01T00:00:00-04:00",
+  "coverage_end": "2026-09-04T16:00:00-04:00",
+  "blackout_policy": {
+    "before_minutes": 15,
+    "after_minutes": 30,
+    "authority_scope": "NEW_ENTRY_ONLY",
+    "owner_confirmed_date": "2026-09-01"
+  },
+  "sources": [
+    {
+      "source_id": "bls-september-2026-release-calendar",
+      "publisher": "U.S. Bureau of Labor Statistics",
+      "url": "https://www.bls.gov/schedule/2026/09_sched_list.htm",
+      "accessed_date": "2026-09-01"
+    },
+    {
+      "source_id": "ism-2026-report-release-calendar",
+      "publisher": "Institute for Supply Management",
+      "url": "https://www.ismworld.org/supply-management-news-and-reports/reports/rob-report-calendar/",
+      "accessed_date": "2026-09-01"
+    }
+  ],
+  "events": [
+    {
+      "event_id": "bls-jolts-2026-09-01",
+      "name": "Job Openings and Labor Turnover Survey (JOLTS)",
+      "scheduled_at": "2026-09-01T10:00:00-04:00",
+      "timezone": "America/New_York",
+      "importance": "TIER_1",
+      "source_id": "bls-september-2026-release-calendar"
+    },
+    {
+      "event_id": "ism-manufacturing-pmi-2026-09-01",
+      "name": "ISM Manufacturing PMI",
+      "scheduled_at": "2026-09-01T10:00:00-04:00",
+      "timezone": "America/New_York",
+      "importance": "TIER_1",
+      "source_id": "ism-2026-report-release-calendar"
+    },
+    {
+      "event_id": "ism-services-pmi-2026-09-03",
+      "name": "ISM Services PMI",
+      "scheduled_at": "2026-09-03T10:00:00-04:00",
+      "timezone": "America/New_York",
+      "importance": "TIER_1",
+      "source_id": "ism-2026-report-release-calendar"
+    },
+    {
+      "event_id": "bls-employment-situation-2026-09-04",
+      "name": "Employment Situation",
+      "scheduled_at": "2026-09-04T08:30:00-04:00",
+      "timezone": "America/New_York",
+      "importance": "TIER_1",
+      "source_id": "bls-september-2026-release-calendar"
+    }
+  ]
+}

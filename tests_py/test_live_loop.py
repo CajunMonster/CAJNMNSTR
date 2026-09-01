@@ -43,7 +43,7 @@ def settings(tmp_path) -> Settings:
     )
 
 
-def collection(at: datetime, *, positions=(), stale=()):
+def collection(at: datetime, *, positions=(), stale=(), hard_failures=()):
     bar = StockBarSnapshot(
         symbol="SPY",
         timestamp=at - timedelta(minutes=5),
@@ -61,7 +61,10 @@ def collection(at: datetime, *, positions=(), stale=()):
         positions=tuple(positions),
         open_orders=(),
         reconciliation=SimpleNamespace(matched=True),
-        snapshot=SimpleNamespace(hard_failures=(), stale_sources=tuple(stale)),
+        snapshot=SimpleNamespace(
+            hard_failures=tuple(hard_failures),
+            stale_sources=tuple(stale),
+        ),
         clock=MarketClockSnapshot(
             timestamp=at,
             is_open=True,
@@ -176,6 +179,67 @@ def test_loop_continues_after_non_actionable_decision_on_new_epoch(tmp_path) -> 
     assert result.terminal_state == "BOUNDED_RUN_COMPLETE"
     assert result.entry_submission_allowed is False
     assert len(runner.calls) == 2
+
+
+def test_tier1_blackout_skips_entry_analysis_then_next_epoch_resumes(tmp_path) -> None:
+    app = settings(tmp_path)
+    runner = FakeRunner(
+        [
+            collection(
+                DECISION_AT,
+                hard_failures=("TIER1_EVENT_BLACKOUT_ACTIVE",),
+            ),
+            collection(DECISION_AT + timedelta(minutes=5)),
+        ],
+        ["NOT_ELIGIBLE"],
+    )
+
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=READ_ONLY_LOOP_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=2,
+    )
+
+    assert result.cycles == 2
+    assert result.canonical_decisions == 1
+    assert len(runner.monitor_calls) == 1
+    assert len(runner.calls) == 1
+    failures = Journal(app.journal_path).list_events(EventType.DATA_HEALTH_FAILURE)
+    assert failures[-1]["payload"]["hard_failures"] == [
+        "TIER1_EVENT_BLACKOUT_ACTIVE"
+    ]
+
+
+def test_tier1_blackout_does_not_prevent_position_management(tmp_path) -> None:
+    app = settings(tmp_path)
+    item = collection(
+        DECISION_AT,
+        positions=(object(),),
+        hard_failures=("TIER1_EVENT_BLACKOUT_ACTIVE",),
+    )
+    runner = FakeRunner([item], [])
+    manager = FakePositionManager(["POSITION_MONITORING"])
+
+    result = ContinuousDecisionLoop(
+        app,
+        Journal(app.journal_path),
+        runner,
+        position_manager=manager,
+        sleep=lambda _: None,
+    ).run(
+        confirmation=POSITION_MANAGEMENT_LOOP_CONFIRMATION,
+        cadence_seconds=30,
+        max_cycles=1,
+    )
+
+    assert result.terminal_state == "BOUNDED_RUN_COMPLETE"
+    assert len(manager.calls) == 1
+    assert runner.calls == []
 
 
 def test_loop_does_not_repeat_terra_for_unchanged_bar_epoch(tmp_path) -> None:

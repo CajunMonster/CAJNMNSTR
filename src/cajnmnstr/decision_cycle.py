@@ -511,8 +511,11 @@ class EvidenceCalculator:
                     simple_skew = atm_put.implied_volatility - atm_call.implied_volatility
             add_feature("feature:simple_skew", "simple_skew", simple_skew, "iv_difference")
 
+        calendar_context = market.get("event_calendar")
         events = market.get("events")
-        if events is None:
+        if isinstance(calendar_context, dict):
+            event_state = str(calendar_context.get("state", "UNAVAILABLE"))
+        elif events is None:
             event_state = "UNAVAILABLE"
         else:
             event_state = "CLEAR" if not events else ", ".join(str(item["name"]) for item in events)
@@ -522,6 +525,12 @@ class EvidenceCalculator:
             event_state,
             "state",
         )
+        if isinstance(calendar_context, dict):
+            evidence[-1]["calendar"] = _json_safe(calendar_context)
+            if bool(calendar_context.get("entry_blocked", False)):
+                hard_failures.append(
+                    str(calendar_context.get("reason_code") or "EVENT_CALENDAR_INVALID")
+                )
         for item in market.get("news", []):
             evidence.append(
                 {

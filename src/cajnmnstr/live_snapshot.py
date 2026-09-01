@@ -20,6 +20,7 @@ from .decision_cycle import (
     ReplayDecisionResult,
     parse_occ_symbol,
 )
+from .event_calendar import EventCalendarContext, StaticTierOneCalendar
 from .health import (
     ENTRY_CRITICAL_COMPONENTS,
     EXIT_CRITICAL_COMPONENTS,
@@ -66,6 +67,7 @@ class LiveEvidenceCollection:
     positions: tuple[PositionSnapshot, ...]
     open_orders: tuple[BrokerOrderSnapshot, ...]
     reconciliation: ReconciliationReport
+    event_calendar: EventCalendarContext
     snapshot: EvidenceSnapshot
 
 
@@ -155,12 +157,14 @@ class LiveEvidenceCollector:
         reader: LiveEvidenceReader,
         *,
         now: Callable[[], datetime] | None = None,
+        event_calendar: StaticTierOneCalendar | None = None,
     ) -> None:
         self.settings = settings
         self.journal = journal
         self.reader = reader
         self.calculator = EvidenceCalculator()
         self._now = now or (lambda: datetime.now(UTC))
+        self.event_calendar = event_calendar or StaticTierOneCalendar.load_default()
 
     def collect(self) -> LiveEvidenceCollection:
         self.settings.validate_static_safety()
@@ -200,6 +204,7 @@ class LiveEvidenceCollector:
         # that first response by milliseconds; using the pre-read clock falsely classified fresh
         # SIP and OPRA observations as future/stale.
         decision_at = max(self._now().astimezone(UTC), clock_at)
+        event_calendar = self.event_calendar.context_at(decision_at)
         completed_bars = _regular_completed_bars(bars, decision_at=decision_at)
         session_date = (
             None if not completed_bars else completed_bars[-1].timestamp.astimezone(NEW_YORK).date()
@@ -220,6 +225,7 @@ class LiveEvidenceCollector:
                 "alpaca_sip": {
                     "symbol": "SPY",
                     "previous_close": previous_close,
+                    "event_calendar": event_calendar.to_evidence(),
                     "bars": [
                         {
                             "t": bar.timestamp + FIVE_MINUTES,
@@ -251,7 +257,7 @@ class LiveEvidenceCollector:
             "spy_quote_at": _iso(quote.observed_at),
             "latest_completed_bar_at": _iso(latest_bar_completion),
             "latest_option_quote_at": _iso(latest_option_at),
-            "event_calendar": "UNAVAILABLE_NOT_INVENTED",
+            "event_calendar": event_calendar.to_provenance(),
             "news": "UNAVAILABLE_NOT_INVENTED",
         }
         snapshot = self.calculator.build(
@@ -299,6 +305,7 @@ class LiveEvidenceCollector:
             positions=tuple(positions),
             open_orders=tuple(open_orders),
             reconciliation=reconciliation,
+            event_calendar=event_calendar,
             snapshot=snapshot,
         )
 
@@ -444,9 +451,15 @@ def build_live_health(
         ),
         _component(
             "event_calendar",
-            HealthState.HEALTHY,
-            "No approved live event-calendar input was available; state is UNAVAILABLE.",
+            (
+                HealthState.HEALTHY
+                if collection.event_calendar.available
+                and not collection.event_calendar.entry_blocked
+                else HealthState.PAUSED
+            ),
+            collection.event_calendar.detail,
             checked_at,
+            "Block new entry only; preserve deterministic position management.",
         ),
         _component(
             "evidence_snapshot",
@@ -803,6 +816,7 @@ def _dashboard_state(
                 "ai_provider",
                 "evidence_store",
                 "broker_reconciliation",
+                "event_calendar",
             }
         ],
     }
@@ -1048,6 +1062,7 @@ def _monitor_dashboard_state(
                 "ai_provider",
                 "evidence_store",
                 "broker_reconciliation",
+                "event_calendar",
             }
         ],
     }
