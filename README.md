@@ -44,7 +44,7 @@ and reviewed before a new deployment.
 
 ## Architecture
 
-- **Alpaca MCP Server v2.3.0** is locally registered as a read-oriented AI/developer
+- **Alpaca MCP Server v2.3.1** is locally registered as a read-oriented AI/developer
   integration with only `assets`, `stock-data`, `options-data`, and `news`. It is not the broker
   execution path.
 - **alpaca-py / Trading API** supplies deterministic paper account access, SPY/options reads, order submission, lifecycle lookup, positions, and reconciliation.

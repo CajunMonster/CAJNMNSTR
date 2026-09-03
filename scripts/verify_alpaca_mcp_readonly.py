@@ -11,7 +11,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-VERSION_PIN = "2.3.0"
+VERSION_PIN = "2.3.1"
 TOOLSETS = ("assets", "stock-data", "options-data", "news")
 PROOF_TOOL = "get_clock"
 FORBIDDEN_TOOL_PREFIXES = (

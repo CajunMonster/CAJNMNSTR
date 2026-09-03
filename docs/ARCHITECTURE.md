@@ -5,7 +5,7 @@ CAJNMNSTR has two Alpaca paths with different authority.
 ## AI-facing market context
 
 Alpaca MCP Server v2 runs locally through
-`uvx --with fastmcp==3.1.0 alpaca-mcp-server==2.3.0` with only:
+`uvx --with fastmcp==3.1.0 alpaca-mcp-server==2.3.1` with only:
 
 - `assets` — asset lookup, option contracts, calendar, and clock
 - `stock-data` — stock bars, quotes, trades, and snapshots
@@ -15,9 +15,9 @@ Alpaca MCP Server v2 runs locally through
 The configuration deliberately excludes `account`, `trading`, `watchlists`, and every other
 toolset. The local Codex registration invokes a secret-free launcher that reads the two required
 credentials from the ignored `.env.local` and supplies them only to the child MCP process. MCP
-credentials never appear in the repository or the Codex registration. FastMCP 3.1.0 matches the
-official Alpaca v2.3.0 lockfile; the explicit pin prevents an incompatible later dependency from
-being selected. The authenticated `get_clock` proof and exposed-tool audit are recorded in
+credentials never appear in the repository or the Codex registration. Alpaca MCP Server v2.3.1
+requires FastMCP 3.x; the explicit 3.1.0 pin prevents an incompatible 4.x dependency from being
+selected. The authenticated `get_clock` proof and exposed-tool audit are recorded in
 [ALPACA_MCP_VERIFICATION.md](ALPACA_MCP_VERIFICATION.md).
 
 ## Deterministic paper execution

@@ -14,7 +14,7 @@ def test_generic_mcp_example_is_read_only() -> None:
 def test_local_mcp_launcher_is_paper_only_and_excludes_write_toolsets() -> None:
     launcher = Path("launcher/Start-Alpaca-Mcp-Readonly.ps1").read_text(encoding="utf-8")
 
-    assert "alpaca-mcp-server==2.3.0" in launcher
+    assert "alpaca-mcp-server==2.3.1" in launcher
     assert "fastmcp==3.1.0" in launcher
     assert "ALPACA_PAPER_TRADE = 'true'" in launcher
     assert "assets,stock-data,options-data,news" in launcher

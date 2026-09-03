@@ -3,7 +3,7 @@
 # values in this repository or in config.toml.
 [mcp_servers.alpaca_market_readonly]
 command = "uvx"
-args = ["--with", "fastmcp==3.1.0", "alpaca-mcp-server==2.3.0"]
+args = ["--with", "fastmcp==3.1.0", "alpaca-mcp-server==2.3.1"]
 env_vars = ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]
 env = { ALPACA_PAPER_TRADE = "true", ALPACA_TOOLSETS = "assets,stock-data,options-data,news" }
 enabled = false

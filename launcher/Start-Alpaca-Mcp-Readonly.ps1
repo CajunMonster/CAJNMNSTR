@@ -49,5 +49,5 @@ $env:ALPACA_PAPER_TRADE = 'true'
 $env:ALPACA_TOOLSETS = $toolsets
 
 $uvx = Get-Command uvx -ErrorAction Stop
-& $uvx.Source '--with' $fastMcpVersion 'alpaca-mcp-server==2.3.0'
+& $uvx.Source '--with' $fastMcpVersion 'alpaca-mcp-server==2.3.1'
 exit $LASTEXITCODE

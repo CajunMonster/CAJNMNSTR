@@ -18,7 +18,7 @@ Keep credentials on this computer. Do not paste credentials into chat, screensho
   configuration. Credentials remain in the ignored `.env.local` and are supplied only to the MCP
   child process.
 - [x] Validate both checked-in MCP templates and the exact four-toolset allowlist.
-- [x] Prove the registered official v2.3.0 runtime with one authenticated PAPER `get_clock` call;
+- [x] Prove the registered official v2.3.1 runtime with one authenticated PAPER `get_clock` call;
   verify that account, order, position, and broker-write tools are absent.
 - [ ] Restart Codex after MCP registration so a fresh client session discovers the v2 tool list.
 
