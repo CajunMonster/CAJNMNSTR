@@ -1,112 +1,112 @@
 {
   "app": "CAJNMNSTR",
   "state": "PAUSED",
-  "checked_at": "2026-09-01T20:02:39.412052+00:00",
+  "checked_at": "2026-09-03T20:00:10.794042+00:00",
   "entry_armed": false,
   "position_management_armed": false,
   "broker_lock_active": false,
   "components": [
     {
       "component": "configuration",
-      "state": "HEALTHY",
-      "message": "Paper endpoint with SIP and OPRA is configured.",
-      "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Public demo configuration is read-only and contains no credentials.",
+      "protective_action": "Keep every broker submission path disabled.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "evidence_store",
-      "state": "HEALTHY",
-      "message": "Evidence journal initialized and probed.",
-      "protective_action": "No protective action required.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Sanitized final checkpoint only; private journal is not connected.",
+      "protective_action": "Display recorded evidence without mutation.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "alpaca",
-      "state": "HEALTHY",
-      "message": "Authenticated paper account reads completed.",
-      "protective_action": "No protective action required.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Final PAPER result is recorded; public demo has no Alpaca connection.",
+      "protective_action": "Keep every broker submission path disabled.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "broker_state",
       "state": "HEALTHY",
-      "message": "Broker account is active, flat, and has no open orders.",
-      "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "message": "Final recorded broker state is flat with zero positions and open orders.",
+      "protective_action": "Preserve the immutable recorded result.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "broker_reconciliation",
       "state": "HEALTHY",
-      "message": "Durable and Alpaca broker identities reconcile.",
-      "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "message": "All 9 broker-backed lifecycles reached CLOSED_BROKER_FLAT.",
+      "protective_action": "Preserve the immutable recorded result.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "market_session",
       "state": "PAUSED",
-      "message": "Market is closed.",
-      "protective_action": "Wait for an executable regular session.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "message": "Competition session is complete and market data is recorded.",
+      "protective_action": "Do not treat recorded data as actionable.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "spy_quote",
-      "state": "HEALTHY",
-      "message": "Data age 7.5s is within policy.",
-      "protective_action": "No protective action required.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Final SIP observation is recorded and intentionally stale.",
+      "protective_action": "Do not treat recorded data as actionable.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "option_quote",
       "state": "PAUSED",
-      "message": "Data is stale or time-inconsistent (age 159.4s).",
-      "protective_action": "Pause proposals and block order submission until fresh data is verified.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "message": "Final OPRA observation is recorded and intentionally stale.",
+      "protective_action": "Do not treat recorded data as actionable.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "risk_limits",
-      "state": "HEALTHY",
-      "message": "Risk thresholds are unchanged and the account is flat.",
-      "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Competition is complete; no public risk authority is active.",
+      "protective_action": "Keep every broker submission path disabled.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "session_risk",
-      "state": "HEALTHY",
-      "message": "Reconciled realized session P&L remains within owner authority.",
-      "protective_action": "Block new entry only; preserve deterministic position management.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Competition session risk is closed with no entry authority.",
+      "protective_action": "Keep every broker submission path disabled.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "ai_provider",
-      "state": "HEALTHY",
-      "message": "Terra is configured and was intentionally not invoked for this cycle.",
-      "protective_action": "ABSTAIN and keep broker submission prohibited.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Competition analysis is complete; public demo has no AI provider connection.",
+      "protective_action": "Display recorded decisions only.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "news",
-      "state": "HEALTHY",
-      "message": "No approved live news input was available; none was invented.",
-      "protective_action": "No protective action required.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "No live news input is connected to the public demo.",
+      "protective_action": "Do not invent or refresh evidence.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "event_calendar",
-      "state": "HEALTHY",
-      "message": "The session's verified Tier-1 event blackout has expired.",
-      "protective_action": "Block new entry only; preserve deterministic position management.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "state": "PAUSED",
+      "message": "Verified competition-calendar coverage has ended.",
+      "protective_action": "Do not treat expired calendar data as actionable.",
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     },
     {
       "component": "evidence_snapshot",
       "state": "PAUSED",
       "message": "Normalized Evidence Snapshot is stale or incomplete.",
       "protective_action": "Keep new entries blocked and preserve the current broker state.",
-      "checked_at": "2026-09-01T20:02:39.412052+00:00"
+      "checked_at": "2026-09-03T20:00:10.794042+00:00"
     }
   ],
-  "mode": "PAPER_AUTONOMOUS_ARMED",
-  "entry_enabled": true,
+  "mode": "PAPER_PUBLIC_READ_ONLY",
+  "entry_enabled": false,
   "position_management_enabled": true,
   "broker_submission_allowed": false,
   "stock_feed": "sip",

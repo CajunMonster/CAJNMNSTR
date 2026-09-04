@@ -2,8 +2,8 @@
   "schema_version": 1,
   "mode": "PAPER",
   "operational_state": "PAUSED",
-  "truth_label": "PAPER · MARKET CLOSED · MONITORING · NO DECISION",
-  "updated_at": "2026-09-01T20:02:39.412052+00:00",
+  "truth_label": "PAPER · COMPETITION COMPLETE · BROKER FLAT · READ-ONLY DEMO · NO LIVE MONITORING · NO DECISION",
+  "updated_at": "2026-09-03T20:00:10.794042+00:00",
   "controls": {
     "entry_enabled": false,
     "entry_armed": false,
@@ -16,151 +16,151 @@
     {
       "id": "alpaca",
       "label": "ALPACA",
-      "value": "PAPER AUTH",
-      "state": "verified",
-      "detail": "Authenticated read-only account and broker state"
+      "value": "PAPER · RECORDED",
+      "state": "paused",
+      "detail": "Sanitized final PAPER checkpoint; no live broker connection"
     },
     {
       "id": "sip",
       "label": "SIP MARKET DATA",
-      "value": "STALE",
-      "state": "verified",
-      "detail": "Data age 7.5s is within policy."
+      "value": "RECORDED",
+      "state": "paused",
+      "detail": "Final recorded SIP checkpoint; not live data"
     },
     {
       "id": "opra",
       "label": "OPRA OPTIONS",
-      "value": "STALE",
+      "value": "RECORDED",
       "state": "paused",
-      "detail": "Data is stale or time-inconsistent (age 159.4s)."
+      "detail": "Final recorded OPRA checkpoint; not live data"
     },
     {
       "id": "terra",
       "label": "TERRA AI",
-      "value": "STANDBY",
+      "value": "COMPLETE",
       "state": "paused",
-      "detail": "Terra is configured and was intentionally not invoked for this cycle."
+      "detail": "Competition analysis is complete; no provider connection in the public demo"
     },
     {
       "id": "referee",
       "label": "REFEREE",
-      "value": "STANDBY",
+      "value": "COMPLETE",
       "state": "paused",
-      "detail": "No actionable evidence epoch was presented."
+      "detail": "Competition decisions are recorded; no active Referee evaluation"
     }
   ],
   "account": {
-    "equity": 99907.79,
-    "buying_power": 399631.16,
-    "options_buying_power": 99907.79,
-    "day_pl": null,
+    "equity": 100088.55,
+    "buying_power": 400354.2,
+    "options_buying_power": 99922.69,
+    "day_pl": 332.0,
     "open_pl": 0.0,
     "position_count": 0,
     "open_order_count": 0,
-    "as_of": "2026-09-01T20:02:39.412052+00:00",
-    "source": "Authenticated Alpaca PAPER read-only"
+    "as_of": "2026-09-03T20:00:10.794042+00:00",
+    "source": "Sanitized recorded Alpaca PAPER final checkpoint"
   },
   "market": {
     "symbol": "SPY",
-    "price": 761.495,
-    "previous_close": 767.05,
-    "change": -5.555,
-    "change_percent": -0.7242031158333877,
-    "last_update": "2026-09-01T20:02:31.945353+00:00",
+    "price": 773.155,
+    "previous_close": 765.16,
+    "change": 7.995,
+    "change_percent": 1.0448795023263109,
+    "last_update": "2026-09-03T20:00:02.924190+00:00",
     "session": "MARKET CLOSED",
     "data_state": "STALE",
     "feed": "ALPACA SIP",
     "candles": [
       {
         "t": "14:55",
-        "o": 760.22,
-        "h": 760.89,
-        "l": 760.17,
-        "c": 760.7295
+        "o": 773.62,
+        "h": 773.67,
+        "l": 773.4,
+        "c": 773.67
       },
       {
         "t": "15:00",
-        "o": 760.72,
-        "h": 761.2,
-        "l": 760.62,
-        "c": 761.14
+        "o": 773.665,
+        "h": 773.705,
+        "l": 773.44,
+        "c": 773.56
       },
       {
         "t": "15:05",
-        "o": 761.16,
-        "h": 761.17,
-        "l": 760.8405,
-        "c": 761.095
+        "o": 773.59,
+        "h": 773.69,
+        "l": 773.479,
+        "c": 773.56
       },
       {
         "t": "15:10",
-        "o": 761.08,
-        "h": 761.48,
-        "l": 761.05,
-        "c": 761.46
+        "o": 773.58,
+        "h": 773.63,
+        "l": 773.3104,
+        "c": 773.38
       },
       {
         "t": "15:15",
-        "o": 761.46,
-        "h": 761.61,
-        "l": 761.11,
-        "c": 761.4
+        "o": 773.375,
+        "h": 773.6,
+        "l": 773.3,
+        "c": 773.6
       },
       {
         "t": "15:20",
-        "o": 761.38,
-        "h": 761.48,
-        "l": 761.07,
-        "c": 761.28
+        "o": 773.6,
+        "h": 773.6,
+        "l": 773.13,
+        "c": 773.18
       },
       {
         "t": "15:25",
-        "o": 761.29,
-        "h": 761.44,
-        "l": 761.18,
-        "c": 761.36
+        "o": 773.185,
+        "h": 773.42,
+        "l": 773.14,
+        "c": 773.41
       },
       {
         "t": "15:30",
-        "o": 761.3999,
-        "h": 761.3999,
-        "l": 760.76,
-        "c": 761.14
+        "o": 773.415,
+        "h": 773.535,
+        "l": 773.27,
+        "c": 773.31
       },
       {
         "t": "15:35",
-        "o": 761.155,
-        "h": 761.34,
-        "l": 760.83,
-        "c": 760.85
+        "o": 773.305,
+        "h": 773.55,
+        "l": 773.3,
+        "c": 773.439
       },
       {
         "t": "15:40",
-        "o": 760.87,
-        "h": 761.2599,
-        "l": 760.74,
-        "c": 761.05
+        "o": 773.45,
+        "h": 773.53,
+        "l": 773.205,
+        "c": 773.23
       },
       {
         "t": "15:45",
-        "o": 761.06,
-        "h": 761.445,
-        "l": 760.97,
-        "c": 761.26
+        "o": 773.22,
+        "h": 773.42,
+        "l": 773.14,
+        "c": 773.24
       },
       {
         "t": "15:50",
-        "o": 761.25,
-        "h": 761.29,
-        "l": 760.58,
-        "c": 760.93
+        "o": 773.26,
+        "h": 773.37,
+        "l": 773.08,
+        "c": 773.23
       },
       {
         "t": "15:55",
-        "o": 760.95,
-        "h": 761.76,
-        "l": 760.595,
-        "c": 761.66
+        "o": 773.24,
+        "h": 773.25,
+        "l": 772.69,
+        "c": 773.13
       }
     ]
   },
@@ -173,28 +173,28 @@
   },
   "options": {
     "feed": "OPRA",
-    "status": "AUTHORIZED · STALE",
+    "status": "AUTHORIZED · RECORDED",
     "chain_health": "VALID",
-    "atm_iv": 10.935,
-    "skew": -0.55,
+    "atm_iv": 9.005,
+    "skew": 0.05,
     "skew_reason": "Same-strike skew",
-    "last_update": "2026-09-01T19:59:59.999985+00:00",
+    "last_update": "2026-09-03T19:59:59.999989+00:00",
     "surface": [
       {
-        "label": "C00763000",
-        "value": 12.51
+        "label": "C00774000",
+        "value": 10.08
       },
       {
-        "label": "P00763000",
-        "value": 13.7
+        "label": "P00774000",
+        "value": 9.82
       },
       {
-        "label": "P00762000",
-        "value": 10.66
+        "label": "P00775000",
+        "value": 12.3
       },
       {
-        "label": "C00762000",
-        "value": 11.21
+        "label": "P00774000",
+        "value": 12.33
       }
     ]
   },
@@ -222,48 +222,59 @@
     "uncertainty": "NOT_EVALUATED",
     "reasons": [
       "market_session",
-      "option_quote",
       "evidence_snapshot"
     ]
   },
   "passport": {
     "id": null,
-    "fixture_id": "alpaca-paper-20260901T200239Z",
+    "fixture_id": "final-competition-summary-20260903",
     "sealed": false,
-    "source": "No Passport created for this monitoring-only cycle"
+    "source": "Public terminal summary; no active Passport"
   },
   "execution": [
     {
       "stage": "PROPOSED",
-      "status": "NOT STARTED",
-      "detail": "Terra not invoked"
+      "status": "COMPLETE",
+      "detail": "101 canonical epochs · 13 actionable candidates"
     },
     {
       "stage": "REFEREE",
-      "status": "NOT STARTED",
-      "detail": "No actionable evidence epoch"
+      "status": "COMPLETE",
+      "detail": "9 APPROVE · 4 REDUCE · 84 ABSTAIN · 4 BLOCK"
     },
     {
       "stage": "SUBMITTED",
-      "status": "STOPPED",
-      "detail": "Entry disabled; broker path absent"
+      "status": "RECORDED",
+      "detail": "9 autonomous entries · 0 manual orders · public broker path absent"
     },
     {
       "stage": "FILLED",
-      "status": "NOT STARTED",
-      "detail": "No broker order"
+      "status": "COMPLETE",
+      "detail": "9 completed PAPER trades · 3 wins · 6 losses"
     },
     {
       "stage": "EXIT",
-      "status": "NOT STARTED",
-      "detail": "No lifecycle change"
+      "status": "CLOSED_BROKER_FLAT",
+      "detail": "9/9 lifecycles · 0 positions · 0 open orders"
     }
   ],
   "activity": [
     {
-      "time": "16:02:39",
-      "kind": "MONITOR",
-      "text": "MARKET CLOSED · broker reconciled · no decision",
+      "time": "16:00:10",
+      "kind": "FINAL RESULT",
+      "text": "COMPETITION COMPLETE · +$90 lifecycle P&L · 0.259% max drawdown",
+      "mode": "PAPER"
+    },
+    {
+      "time": "16:00:10",
+      "kind": "RECONCILIATION",
+      "text": "9/9 lifecycles CLOSED_BROKER_FLAT",
+      "mode": "PAPER"
+    },
+    {
+      "time": "16:00:10",
+      "kind": "BROKER",
+      "text": "0 positions · 0 open orders · 0 SUBMIT_UNKNOWN",
       "mode": "PAPER"
     }
   ],
@@ -277,8 +288,8 @@
     {
       "id": "alpaca",
       "label": "ALPACA",
-      "state": "HEALTHY",
-      "detail": "Authenticated paper account reads completed."
+      "state": "PAUSED",
+      "detail": "Final PAPER account state is recorded; public demo has no broker connection."
     },
     {
       "id": "broker_reconciliation",
@@ -289,56 +300,53 @@
     {
       "id": "spy_quote",
       "label": "SPY QUOTE",
-      "state": "HEALTHY",
-      "detail": "Data age 7.5s is within policy."
+      "state": "PAUSED",
+      "detail": "Final SIP observation is recorded and intentionally stale."
     },
     {
       "id": "option_quote",
       "label": "OPTION QUOTE",
       "state": "PAUSED",
-      "detail": "Data is stale or time-inconsistent (age 159.4s)."
+      "detail": "Final OPRA observation is recorded and intentionally stale."
     },
     {
       "id": "ai_provider",
       "label": "AI PROVIDER",
-      "state": "HEALTHY",
-      "detail": "Terra is configured and was intentionally not invoked for this cycle."
+      "state": "PAUSED",
+      "detail": "Competition analysis is complete; public demo has no provider connection."
     },
     {
       "id": "event_calendar",
       "label": "EVENT CALENDAR",
-      "state": "HEALTHY",
-      "detail": "The session's verified Tier-1 event blackout has expired."
+      "state": "PAUSED",
+      "detail": "Competition-calendar coverage ended with the recorded session."
     }
   ],
   "session_risk": {
-    "session_date": "2026-09-01",
-    "status": "READY",
-    "realized_pnl": "-92.00",
+    "session_date": "2026-09-03",
+    "status": "COMPETITION_COMPLETE",
+    "realized_pnl": "332.00",
     "loss_limit": "2000",
-    "loss_remaining": "1908.00",
-    "completed_lifecycles": 2,
-    "lifecycle_ids": [
-      "cajnmnstr-plan-cde5b59ef1617a4bf11076e1",
-      "cajnmnstr-plan-de257f2a7c8af1cb587aa932"
-    ],
-    "entry_allowed": true,
-    "reason_code": "SESSION_RISK_READY",
-    "detail": "Reconciled realized session P&L remains within owner authority.",
-    "evaluated_at": "2026-09-01T20:02:39.380567+00:00"
+    "loss_remaining": "2332.00",
+    "completed_lifecycles": 3,
+    "lifecycle_ids": [],
+    "entry_allowed": false,
+    "reason_code": "PUBLIC_DEMO_READ_ONLY",
+    "detail": "Competition is complete; public demo cannot create broker authority.",
+    "evaluated_at": "2026-09-03T20:00:10.737469+00:00"
   },
   "supervisor": {
     "version": 2,
-    "updated_at": "2026-09-01T20:02:39.799348+00:00",
+    "updated_at": "2026-09-03T20:00:11.336201+00:00",
     "system_state": "PAUSED",
     "loop_advancing": false,
-    "latest_completed_epoch": "2026-09-01T20:00:00+00:00",
+    "latest_completed_epoch": "2026-09-03T20:00:00+00:00",
     "loop_state": "REGULAR_SESSION_COMPLETE",
     "broker_reconciled": true,
     "sip": "AVAILABLE",
-    "opra": "STALE",
-    "entry_authority": "ENABLED",
-    "position_management": "ARMED",
+    "opra": "AVAILABLE",
+    "entry_authority": "DISABLED",
+    "position_management": "DISARMED",
     "broker_lock": "CLEAR",
     "position_count": 0,
     "open_order_count": 0,
@@ -348,103 +356,160 @@
       {
         "code": "EXCESSIVE_ABSTENTION",
         "detail": "At least 80% of observed epochs are NO_TRADE/ABSTAIN."
+      },
+      {
+        "code": "PROFITABLE_PATTERN_OBSERVED",
+        "detail": "Positive descriptive pattern observed; do not increase risk automatically."
       }
     ],
     "metrics": {
-      "decision_epochs": 45,
-      "eligible_epochs": 45,
-      "terra_long_call": 0,
-      "terra_long_put": 3,
-      "terra_no_trade": 42,
-      "referee_approve": 2,
-      "referee_reduce": 1,
-      "referee_abstain": 42,
+      "decision_epochs": 32,
+      "eligible_epochs": 32,
+      "terra_long_call": 6,
+      "terra_long_put": 0,
+      "terra_no_trade": 26,
+      "referee_approve": 3,
+      "referee_reduce": 3,
+      "referee_abstain": 26,
       "referee_block": 0,
-      "actionable_candidates": 3,
-      "trades_submitted": 4,
-      "fills": 4,
-      "completed_positions": 2,
-      "wins": 0,
-      "losses": 2,
-      "realized_pnl": -92.0,
-      "realized_session_pnl": -92.0,
+      "actionable_candidates": 6,
+      "trades_submitted": 6,
+      "fills": 6,
+      "completed_positions": 3,
+      "wins": 2,
+      "losses": 1,
+      "realized_pnl": 332.0,
+      "realized_session_pnl": 332.0,
       "session_loss_limit": 2000.0,
-      "session_loss_remaining": 1908.0,
-      "session_risk_status": "READY",
+      "session_loss_remaining": 2332.0,
+      "session_risk_status": "COMPETITION_COMPLETE",
       "unrealized_pnl": 0.0,
-      "current_equity": 99907.79,
-      "session_start_equity": 100000.0,
-      "lifecycle_derived_equity": 99908.0,
-      "equity_reconciliation_residual": -0.21,
+      "current_equity": 100088.55,
+      "session_start_equity": 99756.84,
+      "lifecycle_derived_equity": 100088.84,
+      "equity_reconciliation_residual": -0.29,
       "equity_reconciliation_status": "UNATTRIBUTED_RESIDUAL",
-      "peak_equity": 100131.84,
-      "max_drawdown_fraction": 0.0022375500140614612,
+      "peak_equity": 100136.59,
+      "max_drawdown_fraction": 0.00047974471669147114,
       "capital_deployed": 0.0,
-      "average_capital_deployed": 237.76381909547737,
-      "average_winner": null,
-      "average_loser": -46.0,
-      "profit_factor": null,
-      "average_holding_minutes": 59.025537441666664,
-      "average_quoted_spread_percent": 0.6740964348407485,
-      "average_fill_vs_midpoint": 0.00875,
+      "average_capital_deployed": 350.9405684754522,
+      "average_winner": 185.0,
+      "average_loser": -38.0,
+      "profit_factor": 9.736842105263158,
+      "average_holding_minutes": 59.72038071111111,
+      "average_quoted_spread_percent": 0.5653939635334305,
+      "average_fill_vs_midpoint": 0.01,
       "risk_stop_exits": 0,
       "entry_identity_violation": false,
       "risk_limit_warning_active": false,
       "top_refusal_reasons": [
         {
           "reason": "AI_NO_TRADE",
-          "count": 42
+          "count": 26
         },
         {
           "reason": "DIRECTION_STRONGLY_CONFIRMED",
-          "count": 2
+          "count": 3
         },
         {
           "reason": "DIRECTION_CONFIRMED_WITH_SOFT_CONFLICT",
-          "count": 1
+          "count": 3
         }
       ],
-      "incident_count": 58,
+      "incident_count": 59,
+      "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance.",
       "scope": "CURRENT_SESSION",
-      "session_date": "2026-09-01",
-      "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance."
+      "session_date": "2026-09-03"
     },
     "cumulative_metrics": {
-      "decision_epochs": 50,
-      "eligible_epochs": 50,
-      "terra_long_call": 0,
+      "decision_epochs": 101,
+      "eligible_epochs": 101,
+      "terra_long_call": 10,
       "terra_long_put": 3,
-      "terra_no_trade": 47,
-      "referee_approve": 2,
-      "referee_reduce": 1,
-      "referee_abstain": 43,
+      "terra_no_trade": 88,
+      "referee_approve": 9,
+      "referee_reduce": 4,
+      "referee_abstain": 84,
       "referee_block": 4,
-      "actionable_candidates": 3,
-      "trades_submitted": 4,
-      "fills": 4,
-      "completed_positions": 2,
-      "wins": 0,
-      "losses": 2,
-      "realized_pnl": -92.0,
+      "actionable_candidates": 13,
+      "trades_submitted": 18,
+      "fills": 18,
+      "completed_positions": 9,
+      "wins": 3,
+      "losses": 6,
+      "realized_pnl": 90.0,
+      "realized_session_pnl": 332.0,
+      "session_loss_limit": 2000.0,
+      "session_loss_remaining": 2332.0,
+      "session_risk_status": "COMPETITION_COMPLETE",
+      "unrealized_pnl": 0.0,
+      "current_equity": 100088.55,
+      "session_start_equity": 100000.0,
+      "lifecycle_derived_equity": 100090.0,
+      "equity_reconciliation_residual": -1.45,
+      "equity_reconciliation_status": "UNATTRIBUTED_RESIDUAL",
+      "peak_equity": 100136.59,
+      "max_drawdown_fraction": 0.00259,
+      "capital_deployed": 0.0,
+      "average_capital_deployed": 359.1530612244898,
+      "average_winner": 126.66666666666667,
+      "average_loser": -48.333333333333336,
+      "profit_factor": 1.3103448275862069,
+      "average_holding_minutes": 61.39990116851852,
+      "average_quoted_spread_percent": 0.5919854302405853,
+      "average_fill_vs_midpoint": 0.008611111111111111,
+      "risk_stop_exits": 0,
+      "entry_identity_violation": false,
+      "risk_limit_warning_active": false,
+      "top_refusal_reasons": [
+        {
+          "reason": "AI_NO_TRADE",
+          "count": 84
+        },
+        {
+          "reason": "DIRECTION_STRONGLY_CONFIRMED",
+          "count": 9
+        },
+        {
+          "reason": "DIRECTION_CONFIRMED_WITH_SOFT_CONFLICT",
+          "count": 4
+        },
+        {
+          "reason": "STALE_REPLAY_EVIDENCE",
+          "count": 2
+        },
+        {
+          "reason": "STALE_EVIDENCE",
+          "count": 2
+        }
+      ],
+      "incident_count": 225,
+      "autonomous_entries": 9,
+      "autonomous_exits": 9,
+      "broker_flat_lifecycles": 9,
+      "manual_orders": 0,
+      "submit_unknown": 0,
+      "broker_account_gain": 88.55,
+      "position_count": 0,
+      "open_order_count": 0,
+      "final_verdict": "PROFITABLE_AND_HEALTHY",
+      "sample_size_note": "Descriptive competition telemetry only; sample size is too small for statistical significance.",
       "scope": "COMPETITION_TO_DATE"
     },
     "session_risk": {
-      "session_date": "2026-09-01",
-      "status": "READY",
-      "realized_pnl": "-92.00",
+      "session_date": "2026-09-03",
+      "status": "COMPETITION_COMPLETE",
+      "realized_pnl": "332.00",
       "loss_limit": "2000",
-      "loss_remaining": "1908.00",
-      "completed_lifecycles": 2,
-      "lifecycle_ids": [
-        "cajnmnstr-plan-cde5b59ef1617a4bf11076e1",
-        "cajnmnstr-plan-de257f2a7c8af1cb587aa932"
-      ],
-      "entry_allowed": true,
-      "reason_code": "SESSION_RISK_READY",
-      "detail": "Reconciled realized session P&L remains within owner authority.",
-      "evaluated_at": "2026-09-01T20:02:39.513997+00:00"
+      "loss_remaining": "2332.00",
+      "completed_lifecycles": 3,
+      "lifecycle_ids": [],
+      "entry_allowed": false,
+      "reason_code": "PUBLIC_DEMO_READ_ONLY",
+      "detail": "Competition is complete; public demo cannot create broker authority.",
+      "evaluated_at": "2026-09-03T20:00:10.963012+00:00"
     },
-    "next_expected_action": "WAIT FOR NEXT REGULAR SESSION; PRESERVE AUTONOMOUS PAPER AUTHORITY",
+    "next_expected_action": "COMPETITION COMPLETE; REVIEW SANITIZED RESULTS; NO BROKER ACTION",
     "broker_submission_allowed": false
   }
 }
