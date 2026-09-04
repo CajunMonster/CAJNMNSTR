@@ -12,12 +12,33 @@ market evidence → deterministic features → Evidence Passport → AI proposal
 
 The AI may make a case. It never receives trading authority.
 
+## Final competition result
+
+- 101 canonical decision epochs produced 13 actionable candidates.
+- CAJNMNSTR autonomously submitted 9 entries and 9 exits, completing 9 SPY options PAPER trades:
+  3 wins and 6 losses.
+- Session lifecycle P&L was -$92 Tuesday, -$150 Wednesday, and +$332 Thursday, for a cumulative
+  +$90.
+- The dedicated account finished at $100,088.55, an $88.55 broker-account gain from the $100,000
+  start. The $1.45 difference from lifecycle-derived P&L remains an explicit unattributed
+  reconciliation residual.
+- Competition maximum drawdown was 0.259%.
+- All 9 broker-backed lifecycles reached `CLOSED_BROKER_FLAT`; final state was 0 positions and 0
+  open orders.
+- No manual orders were placed and no submission entered `SUBMIT_UNKNOWN`.
+- Final operating verdict: **PROFITABLE AND HEALTHY**.
+
+This is a small PAPER-only sample with modest profitability, not evidence of a statistically
+proven edge or expected future returns. The strongest demonstrated result is autonomous operation
+with evidence provenance, deterministic risk authority, durable lifecycle records, and verified
+broker-flat reconciliation.
+
 ## Competition checkpoint
 
 - Local dashboard: `http://127.0.0.1:8841/`
-- Dedicated Alpaca paper account: authenticated read-only at exactly $100,000, with no positions or open orders at the checkpoint
-- Market/account values in the UI: authenticated read-only PAPER/SIP/OPRA state; closed-market
-  data remains `PAUSED` and non-actionable
+- Dedicated Alpaca paper account: started at $100,000 and finished broker-flat at $100,088.55
+- Market/account values in the UI: authenticated PAPER/SIP/OPRA state; closed-market data remains
+  `PAUSED` and non-actionable
 - Market-data entitlement: Algo Trader Plus verified read-only with SIP equities and OPRA options
 - Alpaca and OpenAI credentials: local only and intentionally absent from the repository
 - New-entry authority: disabled by default and independent from deterministic position management
@@ -79,7 +100,8 @@ The bounded calendar and source record are documented in
   advice.
 - Its competition scope is SPY long calls and long puts. Other asset cards and strategies are not
   part of the system.
-- No profitability, fill quality, uptime, or live-capital safety claim is made.
+- The observed PAPER result does not establish a statistically proven edge, expected profitability,
+  fill quality, uptime, or live-capital safety.
 - Alpaca paper fills and replay outcomes do not establish expected real-market performance.
 - Closed, stale, incomplete, or unreconciled states remain non-actionable.
 - Entry authority is disabled by default. AI output never overrides deterministic risk,

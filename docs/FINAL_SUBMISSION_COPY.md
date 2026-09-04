@@ -1,8 +1,8 @@
 # CAJNMNSTR final submission copy — owner review
 
 This is review copy, not a submission record. It does not authorize trading, public demo access,
-lablab submission, or social posting. Bracketed items must be replaced with verified competition
-evidence or an owner-approved link before use.
+lablab submission, or social posting. Verified competition results are locked below; owner-managed
+links, media, form fields, and publication approvals remain separate.
 
 ## 1. Project title
 
@@ -10,31 +10,33 @@ evidence or an owner-approved link before use.
 
 ## 2. Short description
 
-CAJNMNSTR is a SPY options PAPER-trading agent that turns Alpaca SIP/OPRA data into a cited Terra proposal, then uses a deterministic Referee, contract selector, risk gates, and reconciliation to decide what may proceed.
+CAJNMNSTR is an evidence-governed SPY options PAPER agent that completed 9 autonomous Alpaca trades and finished above starting equity, with sealed Passports, deterministic risk, and broker-flat reconciliation.
 
-_Character count: 220 of 255 maximum._
+_Character count: 210 of 255 maximum._
 
 ## 3. Long description
 
 CAJNMNSTR is an evidence-governed agent for single-leg SPY options in a dedicated Alpaca PAPER
-environment. It reads authenticated account state, SIP equity data, and OPRA option snapshots, then
-normalizes them into one Evidence Snapshot. Deterministic code calculates the numeric features,
-checks provenance and freshness, and opens an Evidence Passport.
+account. It normalizes authenticated SIP equity data, OPRA option snapshots, account state, and
+event context into an Evidence Snapshot. Deterministic code calculates market features, validates
+freshness and provenance, and opens an Evidence Passport.
 
-OpenAI GPT-5.6 Terra receives the normalized evidence—not broker tools—and returns `LONG_CALL`,
-`LONG_PUT`, or `NO_TRADE` with a thesis, strongest counterargument, uncertainty, citations, and an
-invalidation condition. A deterministic Referee independently returns `APPROVE`, `REDUCE`,
-`ABSTAIN`, or `BLOCK`. Only permitted proposals reach deterministic contract and risk selection,
-which enforces SPY-only direction, expiration, delta, Greeks, quote freshness, spread, premium, and
-quantity limits.
+OpenAI GPT-5.6 Terra sees that evidence—not broker tools—and returns `LONG_CALL`, `LONG_PUT`, or
+`NO_TRADE` with a thesis, counterargument, uncertainty, citations, and invalidation. A deterministic
+Referee independently returns `APPROVE`, `REDUCE`, `ABSTAIN`, or `BLOCK`. Only permitted proposals
+reach deterministic contract, quantity, premium, health, and session-risk gates.
 
-The complete Passport is sealed before durable order authority can exist. When the owner has
-explicitly enabled the PAPER path and every health gate passes, the execution coordinator uses a
-pre-recorded client-order identity and Alpaca's Trading API. Broker orders and positions are then
-reconciled with the local journal. Unknown submission outcomes are never blindly retried, and an
-exit is not complete until Alpaca proves the position is flat. Stale data, malformed evidence, AI
-failure, broker uncertainty, or failed reconciliation causes the system to abstain, pause, or block
-rather than quietly continue.
+Across the competition window, CAJNMNSTR evaluated 101 decision epochs, produced 13 actionable
+candidates, and autonomously completed nine entries and nine exits. Every lifecycle reached
+`CLOSED_BROKER_FLAT`; no manual order was placed and no submission entered `SUBMIT_UNKNOWN`.
+Results were three wins and six losses: -$92 Tuesday, -$150 Wednesday, and +$332 Thursday.
+Lifecycle P&L was +$90; Alpaca equity finished at $100,088.55, up $88.55 from the $100,000 start.
+The $1.45 difference remains an explicit unattributed reconciliation residual. Maximum drawdown was
+0.259%.
+
+This is a small, PAPER-only sample with modest profitability—not evidence of a statistically proven
+edge. The demonstrated result is autonomous, auditable operation with deterministic risk, evidence
+provenance, and verified broker-flat reconciliation.
 
 _Word count: 198._
 
@@ -162,11 +164,32 @@ strongly as practical for this workload.
 
 - PAPER trading only; CAJNMNSTR does not trade live capital.
 - The competition observation window is short and cannot establish long-term performance.
-- No claim of profitability, predictive accuracy, uptime, or live-capital safety is made.
+- The modest positive PAPER result is a small sample and does not establish a statistically proven
+  edge, expected profitability, predictive accuracy, uptime, or live-capital safety.
 - Alpaca paper fills can differ materially from executable live-market fills.
 - The strategy is deliberately narrow: intraday, single-leg SPY long calls and puts.
 - Replay results and PAPER outcomes do not establish expected future results.
 - This is a hackathon prototype, not production investment software or financial advice.
+
+## 12a. Verified final competition result
+
+- Decision epochs: 101
+- Actionable candidates: 13
+- Autonomous entries / exits: 9 / 9
+- Completed trades: 9 (3 wins / 6 losses)
+- Session lifecycle P&L: Tuesday -$92; Wednesday -$150; Thursday +$332
+- Cumulative lifecycle P&L: +$90
+- Final Alpaca broker equity: $100,088.55 (+$88.55 from the $100,000 start)
+- Lifecycle-to-broker residual: -$1.45, explicitly unattributed
+- Competition maximum drawdown: 0.259%
+- Reconciliation: 9/9 lifecycles `CLOSED_BROKER_FLAT`
+- Final broker state: 0 positions; 0 open orders
+- Manual orders: 0
+- `SUBMIT_UNKNOWN`: 0
+- Final verdict: **PROFITABLE AND HEALTHY**
+
+This is a modest positive PAPER result over only nine trades. It proves neither statistical edge nor
+expected future profitability.
 
 ## 13. GitHub
 
@@ -202,10 +225,10 @@ result that did not occur.
 
 ### 1:30–2:10 — Reviewed PAPER decision
 
-- **[WAITING FOR REAL COMPETITION RESULT]** Show one genuine reviewed PAPER decision from the
-  competition window.
-- State the verified timestamp, evidence epoch, Terra direction, and whether the system proceeded or
-  refused. Do not imply a trade occurred if the result was `ABSTAIN` or `BLOCK`.
+- Show one sanitized Passport from the 13 genuine actionable competition candidates and one
+  abstention from the 101 canonical decision epochs.
+- State the recorded evidence epoch, Terra direction, Referee verdict, selected contract, and
+  reconciled outcome. Keep all PAPER and provenance labels visible.
 
 ### 2:10–2:55 — Evidence Passport and Terra
 
@@ -220,17 +243,17 @@ result that did not occur.
 
 ### 3:35–4:10 — Alpaca execution and reconciliation
 
-- **[WAITING FOR REAL COMPETITION RESULT]** If an authorized PAPER order occurred, show its
-  sanitized lifecycle, durable client identity, fill/cancel outcome, reconciliation, and verified
-  flat state.
-- If no order occurred, show the truthful refusal or safe-stop record instead.
+- Show one sanitized completed PAPER lifecycle: durable client identity, entry and exit fills,
+  deterministic exit reason, reconciliation, and `CLOSED_BROKER_FLAT` state.
+- Summarize the full result: nine autonomous entries, nine autonomous exits, 9/9 broker-flat, zero
+  manual orders, zero open positions/orders, and zero `SUBMIT_UNKNOWN` events.
 
 ### 4:10–4:30 — Conclusion
 
 - Return to Command.
-- Close with the demonstrated result: an attributable AI analysis governed by deterministic
-  evidence, risk, execution authority, and broker reconciliation.
-- Make no profitability claim.
+- Close with the demonstrated result: 101 decision epochs, 13 actionable candidates, nine completed
+  autonomous trades, +$90 lifecycle P&L, and $100,088.55 final broker equity.
+- State that the positive result was modest and the nine-trade sample does not prove an edge.
 
 ## 16. Seven-slide deck copy
 
@@ -273,19 +296,29 @@ result that did not occur.
 - Dedicated $100,000 PAPER account
 - Trading API plus read-oriented Alpaca MCP
 - Verified SIP and OPRA through Algo Trader Plus
-- **[WAITING FOR REAL COMPETITION RESULT]** Decision(s): [verified count and verdicts]
-- **[WAITING FOR REAL COMPETITION RESULT]** Order/reconciliation result: [verified facts only]
-- **[OPTIONAL]** Official Alpaca PAPER P&L: [value and timestamp, if useful and contextualized]
+- 101 decision epochs: 9 `APPROVE`, 4 `REDUCE`, 84 `ABSTAIN`, 4 `BLOCK`
+- 13 actionable candidates; 9 autonomous entries and exits; 9/9 `CLOSED_BROKER_FLAT`
+- 3 wins / 6 losses; +$90 lifecycle P&L; $100,088.55 final broker equity
+- 0.259% maximum drawdown; 0 manual orders; 0 `SUBMIT_UNKNOWN`
 
 ### Slide 7 — What we learned / closing
 
 - Reasoning quality and trading authority are different systems
 - A refusal or reduction can be a correct agent outcome
 - Recovery and reconciliation belong in the decision architecture
-- **[WAITING FOR REAL COMPETITION RESULT]** Add one evidence-backed competition lesson
+- Evidence-backed lesson: operational integrity was consistent across nine autonomous lifecycles,
+  while three wins in nine trades is far too small a sample to establish an edge
 - CAJNMNSTR preserves the full path from market evidence to verified broker state
 
 ## 17. Social post drafts — do not post
+
+### Published social/build-in-public posts
+
+Submission link capacity: 5 eligible social links.
+
+1. [Social Post #1 — Build story / first autonomous PAPER session](https://x.com/MonsterCaj59872/status/2094935724135006231?s=20)
+
+Remaining link slots: 4.
 
 No event hashtags or account tags are included because none are confirmed in the approved project
 documentation. Add only the officially confirmed tags immediately before an owner-approved post.
@@ -300,24 +333,26 @@ Source: <https://github.com/CajunMonster/CAJNMNSTR>
 
 ### B. First live decision or trade milestone
 
-CAJNMNSTR completed its first competition-window PAPER decision. **[ADD VERIFIED FACTS: timestamp,
-LONG_CALL / LONG_PUT / NO_TRADE, Referee verdict, selected contract if any, and reconciled broker
-outcome.]** The important part is the complete evidence trail from SIP/OPRA inputs through Terra,
+CAJNMNSTR completed 101 canonical competition-window PAPER decisions and produced 13 actionable
+candidates. Nine autonomous entries and nine exits completed with all nine lifecycles verified
+broker-flat. The important part is the complete evidence trail from SIP/OPRA inputs through Terra,
 the Referee, contract selection, and Alpaca reconciliation.
 
 ### C. Safety / refusal / failure-handling milestone
 
-One of CAJNMNSTR's most useful outputs is a documented refusal. **[ADD VERIFIED EVENT: stale feed,
-AI failure, broker uncertainty, invalid contract, ABSTAIN, or BLOCK.]** The system preserved the
-evidence and reason code, denied new exposure, and kept the operator-facing health state truthful.
-For an autonomous agent, knowing when it cannot act is part of the result.
+One of CAJNMNSTR's most useful outputs is a documented refusal: 84 of 101 competition decisions
+ended in `ABSTAIN`, and four ended in `BLOCK`. The system preserved evidence and reason codes,
+denied new exposure when authority was absent, and kept operator-facing health truthful. For an
+autonomous agent, knowing when it cannot act is part of the result.
 
 ### D. Final project / demo
 
 CAJNMNSTR is our evidence-governed SPY options PAPER agent for the Alpaca AI Trading Agents
 Hackathon. Alpaca SIP/OPRA evidence becomes a sealed Passport; Terra provides a cited thesis and
 counterargument; deterministic code controls the Referee, option selection, risk, execution
-authority, and reconciliation. PAPER prototype only, with no profitability claim.
+authority, and reconciliation. It completed nine autonomous PAPER trades, reconciled all nine to
+broker-flat, and finished at $100,088.55 from a $100,000 start. The sample is small and the modest
+positive result does not prove an edge.
 
 Source: <https://github.com/CajunMonster/CAJNMNSTR>
 
@@ -345,22 +380,21 @@ Demo: **[OWNER ACTION — add only after public access is approved and rechecked
 - [x] Four unposted social drafts
 - [x] Project identity and existing brand assets in the public repository
 
-### WAITING FOR REAL COMPETITION RESULT
+### VERIFIED COMPETITION RESULTS
 
-- [ ] Final count of genuine competition-window decisions by Referee verdict
-- [ ] One sanitized, reviewable PAPER decision and Evidence Passport for the demo
-- [ ] Actual selected contract, quantity authority, and decision timestamp, if a contract qualifies
-- [ ] Actual Alpaca order lifecycle and reconciliation evidence, if an order is authorized
-- [ ] Verified broker-flat outcome after any filled position
-- [ ] Official Alpaca PAPER P&L and account timestamp, only if useful and accurately contextualized
-- [ ] One evidence-backed competition learning for Slide 7
-- [ ] Final dashboard screenshots or video capture using real, correctly labeled state
+- [x] Final count of 101 decisions: 9 `APPROVE`, 4 `REDUCE`, 84 `ABSTAIN`, 4 `BLOCK`
+- [x] 13 actionable candidates and 9 autonomous entries / exits
+- [x] 9/9 broker-backed lifecycles verified `CLOSED_BROKER_FLAT`
+- [x] Final lifecycle P&L +$90 and final Alpaca equity $100,088.55
+- [x] $1.45 lifecycle-to-broker residual preserved as unattributed
+- [x] Competition maximum drawdown 0.259%
+- [x] Evidence-backed competition learning included in Slide 7 copy
 
 ### OWNER ACTION
 
 - [ ] Review and approve every section of this document
-- [ ] Replace or remove every bracketed placeholder
 - [ ] Confirm the final lablab form fields and any word/character limits against the live form
+- [ ] Select the sanitized Passport/lifecycle and capture the final correctly labeled dashboard media
 - [ ] Decide whether to make the hosted demo public; if approved, re-run the public leakage and
   read-only-boundary checks before sharing its URL
 - [ ] Record, edit, caption, and upload the final 4–4.5 minute video
@@ -383,8 +417,6 @@ Demo: **[OWNER ACTION — add only after public access is approved and rechecked
 ## Owner review questions
 
 1. Is the short description concrete enough, or should it lead with the Evidence Passport?
-2. Should the final narrative emphasize a genuine trade, a refusal, or both after competition data
-   exists?
-3. Which real Passport best demonstrates the architecture without exposing broker identifiers?
-4. Will the hosted demo remain private, or should a sanitized public version be approved?
-5. Which official event tags, if any, are required for the final form or social posts?
+2. Which real Passport best demonstrates the architecture without exposing broker identifiers?
+3. Will the hosted demo remain private, or should a sanitized public version be approved?
+4. Which official event tags, if any, are required for the final form or social posts?

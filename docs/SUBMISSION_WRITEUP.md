@@ -4,6 +4,25 @@ CAJNMNSTR is an evidence-governed SPY options PAPER-trading agent built for the 
 Agents Hackathon. Its central idea is simple: AI may make the case, but deterministic software
 decides whether that case deserves market authority.
 
+## Verified competition result
+
+Across the competition window, CAJNMNSTR evaluated 101 canonical decision epochs and produced 13
+actionable candidates. It autonomously submitted nine entries and nine exits, completing nine SPY
+options PAPER trades with three wins and six losses. Session lifecycle P&L was -$92 Tuesday, -$150
+Wednesday, and +$332 Thursday, for cumulative lifecycle P&L of +$90. Alpaca-reported final equity
+was $100,088.55, an $88.55 gain from the $100,000 start. The $1.45 lifecycle-versus-broker
+difference remains explicitly unattributed rather than being forced into agreement. Competition
+maximum drawdown was 0.259%.
+
+All nine broker-backed lifecycles reached `CLOSED_BROKER_FLAT`. The final account state had zero
+positions and zero open orders. No manual orders were placed, and no submission entered
+`SUBMIT_UNKNOWN`. The final operating verdict was **PROFITABLE AND HEALTHY**.
+
+The sample is small and profitability was modest. These results do not establish a statistically
+proven edge or expected future performance. They do demonstrate autonomous operation, evidence
+provenance, deterministic risk authority, durable order identity, and broker reconciliation through
+verified flat state.
+
 ## AI logic
 
 Authenticated Alpaca SIP and OPRA inputs are normalized into the same Evidence Snapshot contract
@@ -56,5 +75,6 @@ It contains no Alpaca or AI credentials, broker-writing route, operator arming c
 journal, or sensitive account/order identifiers. Broker-connected runtime components remain local.
 
 CAJNMNSTR is a seven-day hackathon prototype, not financial advice or a production trading system.
-It makes no profitability claim, does not trade live capital, and does not claim that paper fills or
-replay outcomes predict real-market performance.
+It reports a modest positive PAPER result from a small sample, does not trade live capital, and does
+not claim that PAPER fills, replay outcomes, or the competition result predict real-market
+performance.

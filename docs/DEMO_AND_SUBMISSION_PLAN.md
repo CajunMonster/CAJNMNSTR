@@ -5,30 +5,33 @@ authorize posting, deployment access changes, broker actions, or trading.
 
 ## Short project description
 
-CAJNMNSTR is an evidence-governed SPY options PAPER-trading agent. It turns Alpaca SIP and OPRA
-market data into a sealed Evidence Passport, asks Terra for a structured case and counterargument,
-then lets deterministic software decide whether any paper-trading authority is justified.
+CAJNMNSTR is an evidence-governed SPY options PAPER agent that completed 9 autonomous Alpaca trades
+and finished above starting equity, with sealed Passports, deterministic risk, and broker-flat
+reconciliation.
 
 ## Long project description
 
-CAJNMNSTR explores a narrow question: how can an AI trading agent explain a market view without
-receiving unchecked market authority? The competition system focuses only on SPY long calls and
-long puts. Authenticated Alpaca PAPER account state, SIP equity data, and OPRA option snapshots are
-normalized into the same Evidence Snapshot contract used by checked-in replay cases. Deterministic
-code calculates the numeric features, validates freshness and provenance, and records a durable
-Evidence Passport.
+CAJNMNSTR is an evidence-governed agent for single-leg SPY options in a dedicated Alpaca PAPER
+account. It normalizes authenticated SIP equity data, OPRA option snapshots, account state, and
+event context into an Evidence Snapshot. Deterministic code calculates market features, validates
+freshness and provenance, and opens an Evidence Passport.
 
-Terra receives only the normalized evidence and must return `LONG_CALL`, `LONG_PUT`, or `NO_TRADE`
-with a thesis, strongest counterargument, uncertainty, citations, and structured invalidation. A
-deterministic Referee then returns `APPROVE`, `REDUCE`, `ABSTAIN`, or `BLOCK`. If authority exists,
-a deterministic selector considers only eligible SPY contracts within the fixed DTE, delta,
-liquidity, quote-freshness, Greek, spread, and premium rules. The operator path requires a sealed
-Passport, durable Referee result, verified health, reconciliation, and idempotent order identity.
+OpenAI GPT-5.6 Terra sees that evidence—not broker tools—and returns `LONG_CALL`, `LONG_PUT`, or
+`NO_TRADE` with a thesis, counterargument, uncertainty, citations, and invalidation. A deterministic
+Referee independently returns `APPROVE`, `REDUCE`, `ABSTAIN`, or `BLOCK`. Only permitted proposals
+reach deterministic contract, quantity, premium, health, and session-risk gates.
 
-AI cannot call Alpaca's broker-writing interface, enable authority, size a position, relax a limit,
-or bypass reconciliation. The public dashboard is a separate sanitized, read-only visualization.
-It has no credentials, journal database, account or order identifiers, mutation endpoint, or
-execution control.
+Across the competition window, CAJNMNSTR evaluated 101 decision epochs, produced 13 actionable
+candidates, and autonomously completed nine entries and nine exits. Every lifecycle reached
+`CLOSED_BROKER_FLAT`; no manual order was placed and no submission entered `SUBMIT_UNKNOWN`.
+Results were three wins and six losses: -$92 Tuesday, -$150 Wednesday, and +$332 Thursday.
+Lifecycle P&L was +$90; Alpaca equity finished at $100,088.55, up $88.55 from the $100,000 start.
+The $1.45 difference remains an explicit unattributed reconciliation residual. Maximum drawdown was
+0.259%.
+
+This is a small, PAPER-only sample with modest profitability—not evidence of a statistically proven
+edge. The demonstrated result is autonomous, auditable operation with deterministic risk, evidence
+provenance, and verified broker-flat reconciliation.
 
 ## Technology list
 
@@ -95,7 +98,8 @@ lock are separate controls.
 - It uses a dedicated Alpaca PAPER account and does not trade live capital.
 - The strategy is deliberately narrow: intraday SPY long calls and puts only.
 - Replay outcomes and Alpaca paper fills do not establish expected real-market performance.
-- The system makes no profitability, fill-quality, uptime, or live-capital safety claim.
+- The modest positive PAPER result is a small sample and does not establish a statistically proven
+  edge, expected profitability, fill quality, uptime, or live-capital safety.
 - Closed, stale, malformed, unreconciled, or insufficiently entitled data remains non-actionable.
 - The public dashboard is a recorded visualization, not a broker-connected control plane.
 - Sol escalation and broker-native option stop orders are deferred; neither is needed to explain
@@ -105,7 +109,7 @@ lock are separate controls.
 
 ## Demo narrative
 
-The demo should answer three questions in order:
+The demo should answer four questions in order:
 
 1. **What does the agent see?** Show SPY SIP evidence, OPRA option state, provenance, freshness, and
    the sealed Evidence Passport.
@@ -113,6 +117,9 @@ The demo should answer three questions in order:
    uncertainty, citations, and invalidation.
 3. **Who controls the market action?** Show the deterministic Referee, selector, separate authority
    controls, broker lock, journal, and the deliberate stop at `READY_FOR_OPERATOR_REVIEW`.
+4. **Did the full machine run?** Show the verified nine-trade result, 9/9 broker-flat lifecycles,
+   zero manual orders, final flat account, and the modest positive finish with the small-sample
+   limitation visible.
 
 Every screen must retain its actual `PAPER`, `REPLAY`, `PAUSED`, `MARKET CLOSED`, stale/fresh, and
 submission status. Do not crop away safety labels to make the demo look more active.
@@ -153,8 +160,11 @@ private SQLite journal, account/order identifiers, mutation endpoints, or broker
 
 ### 4:05–4:30 — Close
 
-Return to Command and summarize the result: a traceable AI market case governed by deterministic
-evidence, risk, authority, and reconciliation. Make no P&L or profitability claim.
+Return to Command and state the verified result: 101 decision epochs, 13 actionable candidates,
+nine autonomous entries and exits, 9/9 lifecycles broker-flat, and final Alpaca equity of
+$100,088.55. Explain that lifecycle P&L was +$90 while the broker-account gain was +$88.55, leaving
+an explicit $1.45 unattributed residual. Call the outcome modestly profitable and operationally
+healthy, while stating that nine PAPER trades are far too few to prove an edge.
 
 ## Pitch-deck outline
 
@@ -163,13 +173,15 @@ evidence, risk, authority, and reconciliation. Make no P&L or profitability clai
 3. **Evidence Passport:** provenance, features, proposal, counterargument, authority, lifecycle
 4. **Two independent ladders:** computational effort versus deterministic market authority
 5. **Fail-closed architecture:** Referee, health, selector, idempotency, reconciliation, verified flat
-6. **Demo and validation:** replay corpus, strict schemas, read-only live-data path, automated tests
-7. **Limits and next steps:** PAPER-only prototype, narrow SPY scope, deferred Sol and disaster stop
+6. **Alpaca + result:** 101 epochs, 13 candidates, nine autonomous trades, +$90 lifecycle P&L,
+   $100,088.55 final equity, 0.259% max drawdown, 9/9 broker-flat
+7. **Limits and next steps:** modest positive PAPER result from a small sample; narrow SPY scope,
+   deferred Sol and disaster stop
 
 Use the approved skull/top-hat/spade identity, blackened metal, bronze, and silver. Prefer one
-truthful 16:9 dashboard capture as the cover image. A useful future asset would be a 1600×900 crop
-of the real Command page after fresh Monday data verification; do not substitute invented market
-state or unrelated asset-class imagery.
+truthful 16:9 dashboard capture as the cover image. Use a 1600×900 crop of the final recorded
+Command page or another sanitized competition state with its PAPER/session labels visible; do not
+substitute invented market state or unrelated asset-class imagery.
 
 ## Social drafts — do not post without owner approval
 
@@ -177,11 +189,15 @@ state or unrelated asset-class imagery.
 
 Draft: Built CAJNMNSTR for the Alpaca AI Trading Agents Hackathon: a SPY options PAPER agent where
 AI makes a structured case, but deterministic evidence, risk, authority, and reconciliation decide
-what can proceed. Demo and source: [links to add after owner review]
+what can proceed. It completed nine autonomous PAPER trades, reconciled all nine lifecycles to
+broker-flat, and finished modestly above starting equity. Small sample—not a proven edge. Source:
+<https://github.com/CajunMonster/CAJNMNSTR>. Add the demo link only after owner approval.
 
 ### Technical
 
 Draft: CAJNMNSTR separates model reasoning from market authority. Alpaca SIP/OPRA data becomes a
 sealed Evidence Passport; Terra returns a cited thesis and counterargument; a deterministic Referee
 and option selector enforce freshness, Greeks, spread, premium, health, idempotency, and
-reconciliation. PAPER prototype only—no profitability claim. [links to add after owner review]
+reconciliation. Final PAPER result: nine trades, +$90 lifecycle P&L, $100,088.55 broker equity,
+0.259% max drawdown, and 9/9 broker-flat. Small sample; no statistically proven edge. Source:
+<https://github.com/CajunMonster/CAJNMNSTR>. Add the demo link only after owner approval.
